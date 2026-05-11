@@ -39,11 +39,11 @@ A **Equipe 8 (Logística)** atua como **orquestradora** do fluxo de frete no Por
 
 ## 2. Tópicos Kafka
 
-| Tópico | Produtor | Consumidor | Descrição |
-|--------|----------|------------|-----------|
-| `solicitacao_frete_criada` | Logística (Equipe 8) | **Transportadoras (Equipe 9)** | Nova solicitação de frete para cotação |
-| `cotacao_frete_enviada` | **Transportadoras (Equipe 9)** | Logística (Equipe 8) | Cotação de frete enviada pela transportadora |
-| `frete_selecionado` | Logística (Equipe 8) | Transportadoras (Equipe 9) | Notificação da cotação vencedora |
+| Tópico                     | Produtor                       | Consumidor                     | Descrição                                    |
+| -------------------------- | ------------------------------ | ------------------------------ | -------------------------------------------- |
+| `solicitacao_frete_criada` | Logística (Equipe 8)           | **Transportadoras (Equipe 9)** | Nova solicitação de frete para cotação       |
+| `cotacao_frete_enviada`    | **Transportadoras (Equipe 9)** | Logística (Equipe 8)           | Cotação de frete enviada pela transportadora |
+| `frete_selecionado`        | Logística (Equipe 8)           | Transportadoras (Equipe 9)     | Notificação da cotação vencedora             |
 
 **Kafka Bootstrap Servers:** `redpanda:9092` (rede interna Docker)
 
@@ -69,15 +69,15 @@ A **Equipe 8 (Logística)** atua como **orquestradora** do fluxo de frete no Por
 
 ### Campos do Envelope
 
-| Campo | Tipo | Obrigatório | Descrição |
-|-------|------|:-----------:|-----------|
-| `eventId` | `string (UUID v4)` | ✅ | Identificador único do evento. Gerar um novo UUID para cada mensagem publicada. |
-| `eventType` | `string` | ✅ | Nome do tópico. Para cotações: `"cotacao_frete_enviada"`. |
-| `eventVersion` | `string` | ✅ | Versão do contrato. Usar `"1.0"`. |
-| `timestamp` | `string (ISO 8601)` | ✅ | Data/hora de criação do evento em UTC. Exemplo: `"2026-05-10T22:30:00.000Z"`. |
-| `source` | `string` | ✅ | Nome do serviço que originou o evento. Usar `"transportadoras-service"`. |
-| `correlationId` | `string (UUID v4)` | ✅ | **Deve ser o mesmo** `correlationId` recebido no evento `solicitacao_frete_criada`. Isso permite rastreamento ponta-a-ponta no Portal B2B. |
-| `payload` | `object` | ✅ | Dados de negócio do evento (ver seção 4). |
+| Campo           | Tipo                | Obrigatório | Descrição                                                                                                                                  |
+| --------------- | ------------------- |:-----------:| ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `eventId`       | `string (UUID v4)`  | ✅           | Identificador único do evento. Gerar um novo UUID para cada mensagem publicada.                                                            |
+| `eventType`     | `string`            | ✅           | Nome do tópico. Para cotações: `"cotacao_frete_enviada"`.                                                                                  |
+| `eventVersion`  | `string`            | ✅           | Versão do contrato. Usar `"1.0"`.                                                                                                          |
+| `timestamp`     | `string (ISO 8601)` | ✅           | Data/hora de criação do evento em UTC. Exemplo: `"2026-05-10T22:30:00.000Z"`.                                                              |
+| `source`        | `string`            | ✅           | Nome do serviço que originou o evento. Usar `"transportadoras-service"`.                                                                   |
+| `correlationId` | `string (UUID v4)`  | ✅           | **Deve ser o mesmo** `correlationId` recebido no evento `solicitacao_frete_criada`. Isso permite rastreamento ponta-a-ponta no Portal B2B. |
+| `payload`       | `object`            | ✅           | Dados de negócio do evento (ver seção 4).                                                                                                  |
 
 > **IMPORTANTE:** O `correlationId` é essencial para rastreabilidade. Repassem o mesmo valor recebido na solicitação original.
 
@@ -111,15 +111,15 @@ Este é o evento que **vocês devem consumir** do tópico `solicitacao_frete_cri
 
 ### Campos do Payload (solicitação)
 
-| Campo | Tipo | Sempre presente | Descrição |
-|-------|------|:---------------:|-----------|
-| `solicitacao_id` | `string (UUID)` | ✅ | ID da solicitação de frete. **Usar este valor na resposta.** |
-| `pedido_id` | `string (UUID)` | ✅ | ID do pedido de vendas que originou a solicitação. |
-| `tipo_transporte` | `string` | ✅ | Tipo de transporte. Valores possíveis: `RODOVIARIO`, `AEREO`, `MARITIMO`. |
-| `tipo_veiculo` | `string` | ❌ | Tipo de veículo solicitado. Ex: `CAMINHAO_TRUNK`, `VAN`, `CARRETA`. |
-| `tipo_carga` | `string` | ❌ | Tipo de carga. Ex: `GRANEL`, `FRACIONADA`, `CONTAINER`. |
-| `cep_origem` | `string (8 dígitos)` | ❌ | CEP de origem da carga. |
-| `cep_destino` | `string (8 dígitos)` | ❌ | CEP de destino da carga. |
+| Campo             | Tipo                 | Sempre presente | Descrição                                                                 |
+| ----------------- | -------------------- |:---------------:| ------------------------------------------------------------------------- |
+| `solicitacao_id`  | `string (UUID)`      | ✅               | ID da solicitação de frete. **Usar este valor na resposta.**              |
+| `pedido_id`       | `string (UUID)`      | ✅               | ID do pedido de vendas que originou a solicitação.                        |
+| `tipo_transporte` | `string`             | ✅               | Tipo de transporte. Valores possíveis: `RODOVIARIO`, `AEREO`, `MARITIMO`. |
+| `tipo_veiculo`    | `string`             | ❌               | Tipo de veículo solicitado. Ex: `CAMINHAO_TRUNK`, `VAN`, `CARRETA`.       |
+| `tipo_carga`      | `string`             | ❌               | Tipo de carga. Ex: `GRANEL`, `FRACIONADA`, `CONTAINER`.                   |
+| `cep_origem`      | `string (8 dígitos)` | ❌               | CEP de origem da carga.                                                   |
+| `cep_destino`     | `string (8 dígitos)` | ❌               | CEP de destino da carga.                                                  |
 
 > **Dica:** Os campos `tipo_veiculo`, `tipo_carga`, `cep_origem` e `cep_destino` podem ser `null` ou ausentes. Tratem como opcionais na lógica de vocês.
 
@@ -150,12 +150,12 @@ Este é o evento que **vocês devem publicar** no tópico `cotacao_frete_enviada
 
 ### Campos obrigatórios do Payload (cotação)
 
-| Campo | Tipo | Obrigatório | Descrição |
-|-------|------|:-----------:|-----------|
-| `solicitacao_id` | `string (UUID)` | ✅ | O **mesmo** `solicitacao_id` recebido no evento `solicitacao_frete_criada`. Identifica a qual solicitação esta cotação pertence. |
-| `transportadora_id` | `string (UUID)` | ✅ | UUID que identifica a transportadora que está enviando a cotação. |
-| `valor` | `number (Decimal)` | ✅ | Valor do frete em reais (R$). Precisão de até 4 casas decimais. Exemplo: `1250.7500`. |
-| `prazo` | `integer` | ✅ | Prazo de entrega em **dias úteis**. Exemplo: `5`. |
+| Campo               | Tipo               | Obrigatório | Descrição                                                                                                                        |
+| ------------------- | ------------------ |:-----------:| -------------------------------------------------------------------------------------------------------------------------------- |
+| `solicitacao_id`    | `string (UUID)`    | ✅           | O **mesmo** `solicitacao_id` recebido no evento `solicitacao_frete_criada`. Identifica a qual solicitação esta cotação pertence. |
+| `transportadora_id` | `string (UUID)`    | ✅           | UUID que identifica a transportadora que está enviando a cotação.                                                                |
+| `valor`             | `number (Decimal)` | ✅           | Valor do frete em reais (R$). Precisão de até 4 casas decimais. Exemplo: `1250.7500`.                                            |
+| `prazo`             | `integer`          | ✅           | Prazo de entrega em **dias úteis**. Exemplo: `5`.                                                                                |
 
 > **ATENÇÃO:** Todos os 4 campos do payload são **obrigatórios**. Mensagens com campos ausentes ou `null` serão **descartadas** pelo nosso consumer.
 
@@ -277,13 +277,13 @@ public void consumirSolicitacao(String message) {
 
 ## 10. Informações de Infraestrutura
 
-| Recurso | Endereço |
-|---------|----------|
-| Kafka (Redpanda) | `redpanda:9092` (rede Docker interna) |
-| Kafka UI | `http://34.29.84.207:8080` |
-| PostgreSQL (Cloud SQL) | `136.114.235.212:5432` |
-| Logística Service (Health) | `http://localhost:5008/health` |
-| Logística Service (Swagger) | `http://localhost:5008/docs` |
+| Recurso                     | Endereço                              |
+| --------------------------- | ------------------------------------- |
+| Kafka (Redpanda)            | `redpanda:9092` (rede Docker interna) |
+| Kafka UI                    | `http://34.29.84.207:8080`            |
+| PostgreSQL (Cloud SQL)      | `136.114.235.212:5432`                |
+| Logística Service (Health)  | `http://localhost:5008/health`        |
+| Logística Service (Swagger) | `http://localhost:5008/docs`          |
 
 ---
 
@@ -305,11 +305,11 @@ Caso a Equipe 9 enfrente **problemas técnicos** durante a apresentação (conta
 
 ### Cotações simuladas geradas
 
-| Transportadora (fictícia) | UUID Fixo | Valor | Prazo |
-|---------------------------|-----------|-------|-------|
-| TransLog Express | `aaa11111-1111-1111-1111-111111111111` | Aleatório (R$500–R$2000) | Aleatório (2–15 dias) |
-| Rodo Frete Brasil | `bbb22222-2222-2222-2222-222222222222` | Aleatório (R$500–R$2000) | Aleatório (2–15 dias) |
-| CargoVia Sul | `ccc33333-3333-3333-3333-333333333333` | Aleatório (R$500–R$2000) | Aleatório (2–15 dias) |
+| Transportadora (fictícia) | UUID Fixo                              | Valor                    | Prazo                 |
+| ------------------------- | -------------------------------------- | ------------------------ | --------------------- |
+| TransLog Express          | `aaa11111-1111-1111-1111-111111111111` | Aleatório (R$500–R$2000) | Aleatório (2–15 dias) |
+| Rodo Frete Brasil         | `bbb22222-2222-2222-2222-222222222222` | Aleatório (R$500–R$2000) | Aleatório (2–15 dias) |
+| CargoVia Sul              | `ccc33333-3333-3333-3333-333333333333` | Aleatório (R$500–R$2000) | Aleatório (2–15 dias) |
 
 > **Nota:** Os UUIDs das transportadoras fictícias são **fixos e reconhecíveis** (padrão `aaa...`, `bbb...`, `ccc...`), facilitando a distinção entre cotações reais e simuladas nos logs e no banco.
 
@@ -323,12 +323,12 @@ Após a seleção do frete vencedor, o `logistica-service` simula automaticament
 AGUARDANDO ──(cotações chegam)──▶ SELECIONADO ──(10s)──▶ EM_TRANSITO ──(20s)──▶ ENTREGUE
 ```
 
-| Estado | Descrição | Duração simulada |
-|--------|-----------|:----------------:|
-| `AGUARDANDO` | Solicitação criada, aguardando cotações | — |
-| `SELECIONADO` | Cotação vencedora escolhida (menor valor) | Imediato após cotações |
-| `EM_TRANSITO` | Carga despachada, em transporte | 10 segundos após seleção |
-| `ENTREGUE` | Entrega finalizada com sucesso | 20 segundos após trânsito |
+| Estado        | Descrição                                 | Duração simulada          |
+| ------------- | ----------------------------------------- |:-------------------------:|
+| `AGUARDANDO`  | Solicitação criada, aguardando cotações   | —                         |
+| `SELECIONADO` | Cotação vencedora escolhida (menor valor) | Imediato após cotações    |
+| `EM_TRANSITO` | Carga despachada, em transporte           | 10 segundos após seleção  |
+| `ENTREGUE`    | Entrega finalizada com sucesso            | 20 segundos após trânsito |
 
 ### Tópico de acompanhamento: `logistica_status_atualizado`
 
