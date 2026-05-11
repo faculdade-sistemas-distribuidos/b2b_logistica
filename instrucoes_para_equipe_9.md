@@ -28,7 +28,7 @@ A **Equipe 8 (Logística)** atua como **orquestradora** do fluxo de frete no Por
                             ▼                              ▼
 ```
 
-### Resumo do fluxo:
+### Resumo do fluxo
 
 1. **Vendas** envia um pedido com tipo de carga, veículo, CEP de origem e CEP de destino.
 2. **Logística (nós)** recebe o pedido, grava a solicitação no banco e publica o evento `solicitacao_frete_criada` no Kafka.
@@ -79,7 +79,7 @@ A **Equipe 8 (Logística)** atua como **orquestradora** do fluxo de frete no Por
 | `correlationId` | `string (UUID v4)` | ✅ | **Deve ser o mesmo** `correlationId` recebido no evento `solicitacao_frete_criada`. Isso permite rastreamento ponta-a-ponta no Portal B2B. |
 | `payload` | `object` | ✅ | Dados de negócio do evento (ver seção 4). |
 
-> ⚠️ **IMPORTANTE:** O `correlationId` é essencial para rastreabilidade. Repassem o mesmo valor recebido na solicitação original.
+> **IMPORTANTE:** O `correlationId` é essencial para rastreabilidade. Repassem o mesmo valor recebido na solicitação original.
 
 ---
 
@@ -87,7 +87,7 @@ A **Equipe 8 (Logística)** atua como **orquestradora** do fluxo de frete no Por
 
 Este é o evento que **vocês devem consumir** do tópico `solicitacao_frete_criada`.
 
-### Payload que vocês receberão:
+### Payload que vocês receberão
 
 ```json
 {
@@ -121,7 +121,7 @@ Este é o evento que **vocês devem consumir** do tópico `solicitacao_frete_cri
 | `cep_origem` | `string (8 dígitos)` | ❌ | CEP de origem da carga. |
 | `cep_destino` | `string (8 dígitos)` | ❌ | CEP de destino da carga. |
 
-> 💡 **Dica:** Os campos `tipo_veiculo`, `tipo_carga`, `cep_origem` e `cep_destino` podem ser `null` ou ausentes. Tratem como opcionais na lógica de vocês.
+> **Dica:** Os campos `tipo_veiculo`, `tipo_carga`, `cep_origem` e `cep_destino` podem ser `null` ou ausentes. Tratem como opcionais na lógica de vocês.
 
 ---
 
@@ -129,7 +129,7 @@ Este é o evento que **vocês devem consumir** do tópico `solicitacao_frete_cri
 
 Este é o evento que **vocês devem publicar** no tópico `cotacao_frete_enviada` após calcular o valor e prazo do frete.
 
-### Exemplo completo com envelope:
+### Exemplo completo com envelope
 
 ```json
 {
@@ -157,9 +157,9 @@ Este é o evento que **vocês devem publicar** no tópico `cotacao_frete_enviada
 | `valor` | `number (Decimal)` | ✅ | Valor do frete em reais (R$). Precisão de até 4 casas decimais. Exemplo: `1250.7500`. |
 | `prazo` | `integer` | ✅ | Prazo de entrega em **dias úteis**. Exemplo: `5`. |
 
-> ⚠️ **ATENÇÃO:** Todos os 4 campos do payload são **obrigatórios**. Mensagens com campos ausentes ou `null` serão **descartadas** pelo nosso consumer.
+> **ATENÇÃO:** Todos os 4 campos do payload são **obrigatórios**. Mensagens com campos ausentes ou `null` serão **descartadas** pelo nosso consumer.
 
-### Validações aplicadas pelo logistica-service:
+### Validações aplicadas pelo logistica-service
 
 ```python
 # Nosso consumer valida assim:
@@ -179,7 +179,7 @@ Após recebermos **uma ou mais cotações** para a mesma solicitação, nossa l�
 3. **Atualiza o status** da solicitação para `SELECIONADO`.
 4. **Publica o evento** `frete_selecionado` no Kafka.
 
-### Payload do evento `frete_selecionado`:
+### Payload do evento `frete_selecionado`
 
 ```json
 {
@@ -200,7 +200,7 @@ Após recebermos **uma ou mais cotações** para a mesma solicitação, nossa l�
 }
 ```
 
-> 💡 **Nota:** A cada nova cotação recebida, reavaliamos **todas** as cotações da solicitação. Se uma cotação mais barata chegar depois, o frete selecionado é **atualizado** automaticamente.
+> **Nota:** A cada nova cotação recebida, reavaliamos **todas** as cotações da solicitação. Se uma cotação mais barata chegar depois, o frete selecionado é **atualizado** automaticamente.
 
 ---
 
@@ -289,7 +289,7 @@ public void consumirSolicitacao(String message) {
 
 ## 11. Simulação Interna de Cotações (Fallback para Demo)
 
-> ⚠️ **Aviso importante para a Equipe 9:**
+> **Aviso importante para a Equipe 9:**
 
 Para garantir a **robustez da demonstração em aula**, o `logistica-service` possui um endpoint de demo (`POST /demo-fluxo-completo`) que **simula internamente** o envio de 3 cotações fictícias no tópico `cotacao_frete_enviada`.
 
@@ -303,7 +303,7 @@ Caso a Equipe 9 enfrente **problemas técnicos** durante a apresentação (conta
 - O algoritmo de seleção compara **todas** as cotações (reais + simuladas) e seleciona a de **menor valor**, independente da origem.
 - Em produção, o endpoint de demo **não será utilizado** — ele existe apenas para fins acadêmicos.
 
-### Cotações simuladas geradas:
+### Cotações simuladas geradas
 
 | Transportadora (fictícia) | UUID Fixo | Valor | Prazo |
 |---------------------------|-----------|-------|-------|
@@ -311,7 +311,7 @@ Caso a Equipe 9 enfrente **problemas técnicos** durante a apresentação (conta
 | Rodo Frete Brasil | `bbb22222-2222-2222-2222-222222222222` | Aleatório (R$500–R$2000) | Aleatório (2–15 dias) |
 | CargoVia Sul | `ccc33333-3333-3333-3333-333333333333` | Aleatório (R$500–R$2000) | Aleatório (2–15 dias) |
 
-> 💡 **Nota:** Os UUIDs das transportadoras fictícias são **fixos e reconhecíveis** (padrão `aaa...`, `bbb...`, `ccc...`), facilitando a distinção entre cotações reais e simuladas nos logs e no banco.
+> **Nota:** Os UUIDs das transportadoras fictícias são **fixos e reconhecíveis** (padrão `aaa...`, `bbb...`, `ccc...`), facilitando a distinção entre cotações reais e simuladas nos logs e no banco.
 
 ---
 
@@ -348,8 +348,10 @@ A cada transição de status, publicamos um evento no tópico `logistica_status_
 }
 ```
 
-> 💡 **Para o Frontend:** O status pode ser consultado via polling em `GET /solicitacoes/{id}` ou monitorando o tópico `logistica_status_atualizado` no Kafka.
+> **Para o Frontend:** O status pode ser consultado via polling em `GET /solicitacoes/{id}` ou monitorando o tópico `logistica_status_atualizado` no Kafka.
 
 ---
 
-> **Dúvidas?** Entrem em contato com a Equipe 8. Estamos disponíveis para apoiar na integração e realizar testes conjuntos via Kafka UI.
+> **Dúvidas?** Entrem em contato com a Equipe 8 (Logística). Estamos disponíveis para apoiar na integração e realizar testes conjuntos via Kafka UI.
+
+---
