@@ -8,6 +8,7 @@ import asyncio
 import logging
 import random
 import uuid
+from decimal import Decimal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
@@ -126,25 +127,109 @@ _TRANSPORTADORAS_DEMO = [
 ]
 
 
+# ============================================================
+# Mapeamento automático de veículo por peso (regras BR)
+# ============================================================
+
+# Faixas de preço simulado por tipo de veículo (min, max em R$)
+_FAIXAS_PRECO_VEICULO = {
+    "FURGAO":                   (350.00,  900.00),
+    "CAMINHAO_3_4":             (800.00,  1800.00),
+    "CAMINHAO_BAU_NORMAL":      (1500.00, 3500.00),
+    "CAMINHAO_BAU_FRIGORIFICO": (2200.00, 4500.00),
+    "CAMINHAO_SIDER":           (1800.00, 3800.00),
+}
+
+# Faixas de prazo simulado por tipo de veículo (min, max em dias)
+_FAIXAS_PRAZO_VEICULO = {
+    "FURGAO":                   (1, 4),
+    "CAMINHAO_3_4":             (2, 7),
+    "CAMINHAO_BAU_NORMAL":      (3, 10),
+    "CAMINHAO_BAU_FRIGORIFICO": (2, 6),
+    "CAMINHAO_SIDER":           (3, 10),
+}
+
+
+def selecionar_veiculo_por_peso(
+    peso_carga: Decimal | None,
+    tipo_carga_natureza: str | None = None,
+) -> str | None:
+    """
+    Seleciona automaticamente o tipo de veículo com base no peso da carga.
+
+    Regras de negócio (logística brasileira):
+      - Até 1.500 kg:           FURGAO (entregas urbanas / cargas leves)
+      - 1.501 kg a 4.000 kg:   CAMINHAO_3_4 (distribuição regional)
+      - Acima de 4.000 kg:
+          - Perecível:          CAMINHAO_BAU_FRIGORIFICO
+          - Carga lateral:      CAMINHAO_SIDER (lonado)
+          - Seca geral:        CAMINHAO_BAU_NORMAL
+
+    Args:
+        peso_carga: Peso total da carga em kg. Se None, retorna None.
+        tipo_carga_natureza: Natureza da carga (PERECIVEL, CARGA_LATERAL, SECA_GERAL).
+                             Relevante apenas para cargas acima de 4.000 kg.
+
+    Returns:
+        Código do tipo de veículo ou None se peso_carga não informado.
+    """
+    if peso_carga is None:
+        return None
+
+    peso = Decimal(str(peso_carga))
+
+    # Porte Pequeno
+    if peso <= Decimal("1500"):
+        return "FURGAO"
+
+    # Porte Médio
+    if peso <= Decimal("4000"):
+        return "CAMINHAO_3_4"
+
+    # Porte Grande — subdivisão por natureza da carga
+    natureza = (tipo_carga_natureza or "SECA_GERAL").upper().strip()
+
+    if natureza == "PERECIVEL":
+        return "CAMINHAO_BAU_FRIGORIFICO"
+    elif natureza == "CARGA_LATERAL":
+        return "CAMINHAO_SIDER"
+    else:
+        return "CAMINHAO_BAU_NORMAL"
+
+
 async def _simular_cotacoes_background(
     solicitacao_id: str,
     correlation_id: str,
+    tipo_veiculo: str | None = None,
 ) -> None:
     """
     Background task que simula 3 cotações de transportadoras diferentes.
 
-    Gera valores aleatórios entre R$ 500 e R$ 2.000 e prazos entre 2 e 15 dias.
+    Se tipo_veiculo for informado, gera valores coerentes com o porte do veículo.
+    Caso contrário, gera valores aleatórios entre R$ 500 e R$ 2.000.
     Publica no tópico cotacao_frete_enviada com o envelope oficial,
     fazendo o consumer existente processar cada uma normalmente.
     """
-    # Gerar cotações com valores aleatórios
+    # Determinar faixas de preço e prazo
+    if tipo_veiculo and tipo_veiculo in _FAIXAS_PRECO_VEICULO:
+        preco_min, preco_max = _FAIXAS_PRECO_VEICULO[tipo_veiculo]
+        prazo_min, prazo_max = _FAIXAS_PRAZO_VEICULO[tipo_veiculo]
+        logger.info(
+            "[DEMO] Cotações calibradas para veículo %s (R$%.0f–R$%.0f, %d–%d dias)",
+            tipo_veiculo, preco_min, preco_max, prazo_min, prazo_max,
+        )
+    else:
+        preco_min, preco_max = 500.00, 2000.00
+        prazo_min, prazo_max = 2, 15
+
+    # Gerar cotações com valores baseados no porte do veículo
     cotacoes_simuladas = []
     for transportadora in _TRANSPORTADORAS_DEMO:
         cotacoes_simuladas.append({
             "transportadora_id": transportadora["id"],
             "nome": transportadora["nome"],
-            "valor": round(random.uniform(500.00, 2000.00), 2),
-            "prazo": random.randint(2, 15),
+            "valor": round(random.uniform(preco_min, preco_max), 2),
+            "prazo": random.randint(prazo_min, prazo_max),
         })
 
     # Log resumo das cotações geradas
@@ -225,6 +310,19 @@ async def demo_fluxo_completo(
     """
     correlation_id = str(uuid.uuid4())
 
+    # 0. Triagem automática de veículo por peso (regras BR)
+    tipo_veiculo_final = dados.tipo_veiculo
+    if dados.peso_carga is not None and not dados.tipo_veiculo:
+        tipo_veiculo_final = selecionar_veiculo_por_peso(
+            peso_carga=dados.peso_carga,
+            tipo_carga_natureza=dados.tipo_carga_natureza,
+        )
+        logger.info(
+            "[DEMO] Triagem automática: peso=%.1f kg → veículo=%s",
+            dados.peso_carga,
+            tipo_veiculo_final,
+        )
+
     # 1. Gravar solicitação no banco (idêntico ao /solicitar-externo)
     solicitacao = SolicitacaoFrete(
         pedido_id=dados.pedido_id,
@@ -247,14 +345,18 @@ async def demo_fluxo_completo(
         "pedido_id": str(solicitacao.pedido_id),
         "tipo_transporte": solicitacao.tipo_transporte,
     }
-    if dados.tipo_veiculo:
-        payload["tipo_veiculo"] = dados.tipo_veiculo
+    if tipo_veiculo_final:
+        payload["tipo_veiculo"] = tipo_veiculo_final
     if dados.tipo_carga:
         payload["tipo_carga"] = dados.tipo_carga
     if dados.cep_origem:
         payload["cep_origem"] = dados.cep_origem
     if dados.cep_destino:
         payload["cep_destino"] = dados.cep_destino
+    if dados.peso_carga is not None:
+        payload["peso_carga"] = str(dados.peso_carga)
+    if dados.tipo_carga_natureza:
+        payload["tipo_carga_natureza"] = dados.tipo_carga_natureza
 
     await publish_event(
         topic=TOPIC_SOLICITACAO_CRIADA,
@@ -268,10 +370,13 @@ async def demo_fluxo_completo(
         _simular_cotacoes_background,
         solicitacao_id=str(solicitacao.id),
         correlation_id=correlation_id,
+        tipo_veiculo=tipo_veiculo_final,
     )
 
     logger.info(
-        "[DEMO] Resposta enviada. Cotações simuladas serão publicadas em ~2s."
+        "[DEMO] Resposta enviada. Cotações simuladas serão publicadas em ~2s. "
+        "Veículo: %s",
+        tipo_veiculo_final or "(não especificado)",
     )
 
     return solicitacao

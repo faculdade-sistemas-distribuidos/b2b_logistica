@@ -41,6 +41,24 @@ class SolicitacaoFreteCreate(BaseModel):
     cep_destino: Optional[str] = Field(
         None, max_length=8, description="CEP de destino"
     )
+    # Campos para triagem automática de veículo por peso
+    peso_carga: Optional[Decimal] = Field(
+        None,
+        description=(
+            "Peso total da carga em kg. Usado para seleção automática do tipo de veículo:\n"
+            "- Até 1.500 kg → FURGAO\n"
+            "- 1.501 a 4.000 kg → CAMINHAO_3_4\n"
+            "- Acima de 4.000 kg → Baú Normal, Frigorífico ou Sider (depende do tipo_carga_natureza)"
+        ),
+    )
+    tipo_carga_natureza: Optional[str] = Field(
+        None,
+        max_length=50,
+        description=(
+            "Natureza da carga para porte grande (>4.000 kg). "
+            "Valores: PERECIVEL, CARGA_LATERAL, SECA_GERAL (padrão)"
+        ),
+    )
 
 
 # ============================================================

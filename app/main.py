@@ -9,9 +9,12 @@ Inicializa o FastAPI com:
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.kafka_handler import (
     consume_loop,
@@ -29,6 +32,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("logistica-service")
+
+ROOT_PATH = os.getenv("ROOT_PATH", "")
 
 
 @asynccontextmanager
@@ -78,6 +83,15 @@ app = FastAPI(
     ),
     version="1.0.0",
     lifespan=lifespan,
+    root_path=ROOT_PATH,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(router)
