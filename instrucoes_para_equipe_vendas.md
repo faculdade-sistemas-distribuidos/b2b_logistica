@@ -69,20 +69,20 @@ Este é o **único evento** que a Equipe de Vendas deve publicar para iniciar o 
 
 ### Campos do Payload
 
-| Campo | Tipo | Obrigatório | Descrição |
-|-------|------|:-----------:|-----------|
-| `pedido_id` | `string (UUID v4)` | ✅ | Identificador único do pedido de vendas. |
-| `tipo_transporte` | `string` | ✅ | Modalidade de transporte: `RODOVIARIO`, `AEREO` ou `MARITIMO`. |
-| `peso_carga` | `number (Decimal)` | ✅ | Peso total da carga em **kg**. Usado para triagem automática do veículo. |
-| `cep_origem` | `string (8 dígitos)` | ✅ | CEP do local de coleta da carga. |
-| `cep_destino` | `string (8 dígitos)` | ✅ | CEP do local de entrega da carga. |
+| Campo             | Tipo                 | Obrigatório | Descrição                                                                |
+| ----------------- | -------------------- |:-----------:| ------------------------------------------------------------------------ |
+| `pedido_id`       | `string (UUID v4)`   | ✅           | Identificador único do pedido de vendas.                                 |
+| `tipo_transporte` | `string`             | ✅           | Modalidade de transporte: `RODOVIARIO`, `AEREO` ou `MARITIMO`.           |
+| `peso_carga`      | `number (Decimal)`   | ✅           | Peso total da carga em **kg**. Usado para triagem automática do veículo. |
+| `cep_origem`      | `string (8 dígitos)` | ✅           | CEP do local de coleta da carga.                                         |
+| `cep_destino`     | `string (8 dígitos)` | ✅           | CEP do local de entrega da carga.                                        |
 
 ### Campos Opcionais (melhoram a triagem)
 
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
+| Campo                 | Tipo     | Descrição                                                                                                                           |
+| --------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `tipo_carga_natureza` | `string` | Natureza da carga: `PERECIVEL`, `CARGA_LATERAL` ou `SECA_GERAL`. Relevante para cargas > 4.000 kg. Se omitido, assume `SECA_GERAL`. |
-| `tipo_carga` | `string` | Classificação da carga: `GRANEL`, `FRACIONADA`, `CONTAINER`. |
+| `tipo_carga`          | `string` | Classificação da carga: `GRANEL`, `FRACIONADA`, `CONTAINER`.                                                                        |
 
 ---
 
@@ -90,13 +90,13 @@ Este é o **único evento** que a Equipe de Vendas deve publicar para iniciar o 
 
 Baseado no `peso_carga`, nosso sistema seleciona automaticamente o veículo ideal:
 
-| Porte | Faixa de Peso | Veículo | Descrição |
-|-------|:------------:|---------|-----------|
-| **Pequeno** | Até 1.500 kg | `FURGAO` | Entregas urbanas, e-commerce |
-| **Médio** | 1.501 – 4.000 kg | `CAMINHAO_3_4` | Distribuição regional |
-| **Grande** | > 4.000 kg + `SECA_GERAL` | `CAMINHAO_BAU_NORMAL` | Carga seca geral |
-| **Grande** | > 4.000 kg + `PERECIVEL` | `CAMINHAO_BAU_FRIGORIFICO` | Cargas refrigeradas |
-| **Grande** | > 4.000 kg + `CARGA_LATERAL` | `CAMINHAO_SIDER` | Descarga lateral rápida |
+| Porte       | Faixa de Peso                | Veículo                    | Descrição                    |
+| ----------- |:----------------------------:| -------------------------- | ---------------------------- |
+| **Pequeno** | Até 1.500 kg                 | `FURGAO`                   | Entregas urbanas, e-commerce |
+| **Médio**   | 1.501 – 4.000 kg             | `CAMINHAO_3_4`             | Distribuição regional        |
+| **Grande**  | > 4.000 kg + `SECA_GERAL`    | `CAMINHAO_BAU_NORMAL`      | Carga seca geral             |
+| **Grande**  | > 4.000 kg + `PERECIVEL`     | `CAMINHAO_BAU_FRIGORIFICO` | Cargas refrigeradas          |
+| **Grande**  | > 4.000 kg + `CARGA_LATERAL` | `CAMINHAO_SIDER`           | Descarga lateral rápida      |
 
 > **Vocês não precisam enviar `tipo_veiculo`.** Nós determinamos isso automaticamente pelo peso. Isso garante a eficiência operacional da entrega.
 
@@ -106,13 +106,13 @@ Baseado no `peso_carga`, nosso sistema seleciona automaticamente o veículo idea
 
 As cotações geradas pelo nosso sistema são calibradas por tipo de veículo:
 
-| Veículo | Faixa de Valor (R$) | Prazo (dias úteis) |
-|---------|:-------------------:|:------------------:|
-| `FURGAO` | 350 – 900 | 1 – 4 |
-| `CAMINHAO_3_4` | 800 – 1.800 | 2 – 7 |
-| `CAMINHAO_BAU_NORMAL` | 1.500 – 3.500 | 3 – 10 |
-| `CAMINHAO_BAU_FRIGORIFICO` | 2.200 – 4.500 | 2 – 6 |
-| `CAMINHAO_SIDER` | 1.800 – 3.800 | 3 – 10 |
+| Veículo                    | Faixa de Valor (R$) | Prazo (dias úteis) |
+| -------------------------- |:-------------------:|:------------------:|
+| `FURGAO`                   | 350 – 900           | 1 – 4              |
+| `CAMINHAO_3_4`             | 800 – 1.800         | 2 – 7              |
+| `CAMINHAO_BAU_NORMAL`      | 1.500 – 3.500       | 3 – 10             |
+| `CAMINHAO_BAU_FRIGORIFICO` | 2.200 – 4.500       | 2 – 6              |
+| `CAMINHAO_SIDER`           | 1.800 – 3.800       | 3 – 10             |
 
 ---
 
@@ -214,14 +214,14 @@ AGUARDANDO ──▶ SELECIONADO ──(10s)──▶ EM_TRANSITO ──(20s)─
 
 ## 7. Configuração de Infraestrutura
 
-| Recurso | Endereço |
-|---------|----------|
-| **Kafka (Redpanda)** | `redpanda:9092` (rede Docker interna) |
-| **Kafka UI** | `http://34.29.84.207:8080` |
-| **Database (Cloud SQL)** | `136.114.235.212:5432` |
-| **Logística API (Gateway)** | `http://34.8.17.245/api/logistica/` |
-| **Logística Dashboard** | `http://34.8.17.245:3000/` |
-| **Swagger/OpenAPI** | `http://34.8.17.245/api/logistica/docs` |
+| Recurso                     | Endereço                                |
+| --------------------------- | --------------------------------------- |
+| **Kafka (Redpanda)**        | `redpanda:9092` (rede Docker interna)   |
+| **Kafka UI**                | `http://34.29.84.207:8080`              |
+| **Database (Cloud SQL)**    | `136.114.235.212:5432`                  |
+| **Logística API (Gateway)** | `http://34.8.17.245/api/logistica/`     |
+| **Logística Dashboard**     | `http://34.8.17.245:3000/`              |
+| **Swagger/OpenAPI**         | `http://34.8.17.245/api/logistica/docs` |
 
 ---
 
