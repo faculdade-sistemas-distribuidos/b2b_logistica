@@ -1,0 +1,128 @@
+"""
+models.py — Modelos SQLAlchemy mapeando as tabelas existentes no schema portal_b2b.
+
+Tabelas criadas pela equipe de banco (DDL script 04):
+  - portal_b2b.solicitacao_frete
+  - portal_b2b.cotacao_frete
+  - portal_b2b.frete_selecionado
+
+IMPORTANTE: Estes modelos NÃO criam tabelas. Apenas mapeiam a estrutura existente.
+"""
+
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    text,
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+
+from app.database import Base
+
+SCHEMA = "portal_b2b"
+
+
+class SolicitacaoFrete(Base):
+    """Mapeamento da tabela portal_b2b.solicitacao_frete."""
+
+    __tablename__ = "solicitacao_frete"
+    __table_args__ = {"schema": SCHEMA}
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    pedido_id = Column(UUID(as_uuid=True), nullable=False)
+    tipo_transporte = Column(String(50), nullable=False)
+    status = Column(String(30), nullable=False, server_default=text("'AGUARDANDO'"))
+    data_criacao = Column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    # Relacionamentos
+    cotacoes = relationship(
+        "CotacaoFrete",
+        back_populates="solicitacao",
+        lazy="selectin",
+    )
+    frete_selecionado = relationship(
+        "FreteSelecionado",
+        back_populates="pedido_rel",
+        uselist=False,
+        lazy="selectin",
+        foreign_keys="FreteSelecionado.pedido_id",
+        primaryjoin="SolicitacaoFrete.pedido_id == FreteSelecionado.pedido_id",
+    )
+
+
+class CotacaoFrete(Base):
+    """Mapeamento da tabela portal_b2b.cotacao_frete."""
+
+    __tablename__ = "cotacao_frete"
+    __table_args__ = {"schema": SCHEMA}
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    solicitacao_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{SCHEMA}.solicitacao_frete.id"),
+        nullable=False,
+    )
+    transportadora_id = Column(UUID(as_uuid=True), nullable=False)
+    valor = Column(Numeric(18, 4), nullable=False)
+    prazo = Column(Integer, nullable=False)
+    data_cotacao = Column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    # Relacionamentos
+    solicitacao = relationship(
+        "SolicitacaoFrete",
+        back_populates="cotacoes",
+    )
+
+
+class FreteSelecionado(Base):
+    """Mapeamento da tabela portal_b2b.frete_selecionado."""
+
+    __tablename__ = "frete_selecionado"
+    __table_args__ = {"schema": SCHEMA}
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    pedido_id = Column(UUID(as_uuid=True), nullable=False, unique=True)
+    cotacao_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{SCHEMA}.cotacao_frete.id"),
+        nullable=False,
+    )
+    data_selecao = Column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    # Relacionamentos
+    cotacao = relationship("CotacaoFrete", lazy="selectin")
+    pedido_rel = relationship(
+        "SolicitacaoFrete",
+        back_populates="frete_selecionado",
+        uselist=False,
+        foreign_keys=[pedido_id],
+        primaryjoin="FreteSelecionado.pedido_id == SolicitacaoFrete.pedido_id",
+    )

@@ -1,0 +1,1 @@
+# logistica-service app package

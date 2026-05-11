@@ -1,0 +1,15 @@
+services:
+  logistica-service:
+    build: .
+    container_name: logistica-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5008:5008"
+    networks:
+      - portal-b2b-network
+
+networks:
+  portal-b2b-network:
+    external: true
