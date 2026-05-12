@@ -216,15 +216,19 @@ async def _simular_cotacoes_background(
     Publica no tópico cotacao_frete_enviada com o envelope oficial,
     fazendo o consumer existente processar cada uma normalmente.
     """
-    # 0. Buscar transportadora real no banco
+    # 0. Buscar transportadoras reais no banco
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(Empresa).join(EmpresaPerfil).join(Perfil)
-            .where(Perfil.nome == 'TRANSPORTADORA').limit(1)
+            .where(Perfil.nome == 'TRANSPORTADORA').limit(3)
         )
-        transportadora_real = result.scalar()
-        t_id = transportadora_real.id if transportadora_real else "b32bd9f2-6122-4c84-b721-b284aec606e1"
-        t_id = str(t_id)
+        transportadoras_reais = result.scalars().all()
+        
+        t_ids = [str(t.id) for t in transportadoras_reais]
+        
+        # Fallback caso o banco não retorne nenhuma
+        if not t_ids:
+            t_ids = ["b32bd9f2-6122-4c84-b721-b284aec606e1"]
 
     # Determinar faixas de preço e prazo
     if tipo_veiculo and tipo_veiculo in _FAIXAS_PRECO_VEICULO:
@@ -240,9 +244,12 @@ async def _simular_cotacoes_background(
 
     # Gerar cotações com valores baseados no porte do veículo
     cotacoes_simuladas = []
-    for transportadora in _TRANSPORTADORAS_DEMO:
+    for i, transportadora in enumerate(_TRANSPORTADORAS_DEMO):
+        # Distribui os IDs disponíveis. Se houver menos que 3, repete usando o resto da divisão.
+        t_id_atual = t_ids[i % len(t_ids)]
+        
         cotacoes_simuladas.append({
-            "transportadora_id": t_id,
+            "transportadora_id": t_id_atual,
             "nome": transportadora["nome"],
             "valor": round(random.uniform(preco_min, preco_max), 2),
             "prazo": random.randint(prazo_min, prazo_max),
