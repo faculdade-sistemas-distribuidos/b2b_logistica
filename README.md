@@ -2,243 +2,132 @@
 
 > Microsserviço de Logística do Portal B2B — CMP1896 Sistemas Distribuídos (PUC-GO)
 
-## Visão Geral
+## Estado do Projeto: Integração Completa
 
-O `logistica-service` é o orquestrador do fluxo de frete no Portal B2B. Recebe solicitações de frete
-originadas pela equipe de Vendas, publica no Kafka para cotação pelas Transportadoras (Equipe 9),
-seleciona automaticamente a cotação de menor valor e simula o ciclo completo de entrega.
+O serviço de Logística encontra-se **100% integrado** ao ecossistema de produção do Portal B2B.
 
----
-
-## Infraestrutura
-
-| Recurso | Endereço |
-|---------|----------|
-| **Porta do serviço** | `5008` |
-| **Load Balancer** | `34.8.17.245` |
-| **PostgreSQL (Cloud SQL)** | `136.114.235.212:5432` |
-| **Kafka (Redpanda)** | `redpanda:9092` (rede Docker interna) |
-| **Kafka UI** | `http://34.29.84.207:8080` |
+- **Conectividade Validada**: Comunicação em tempo real estabelecida e estabilizada com o banco de dados oficial **PostgreSQL (Cloud SQL)** e o message broker **Kafka (Redpanda)**.
+- **Dashboard Remodelado**: A interface de visualização (front-end) foi totalmente reestruturada para uma experiência profissional, contando agora com um **layout de duas colunas**, suporte nativo a **scroll vertical** para grandes volumes de dados e **mapeamento inteligente de nomes amigáveis** para as transportadoras oficiais cadastradas.
 
 ---
 
-## Endpoints REST
+## Pilha Tecnológica (Tech Stack)
 
-### Health Check
-```
-GET /health
-```
-Retorna o status do serviço. O API Gateway mapeia para `/api/logistica/health`.
+A infraestrutura e o código da aplicação foram desenvolvidos com as seguintes tecnologias:
 
-**Resposta:**
-```json
-{"status": "ok", "service": "logistica-service"}
-```
-
-### Solicitar Frete (Simulação de Vendas)
-```
-POST /solicitar-externo
-```
-Simula o recebimento de um pedido da equipe de Vendas. Grava a solicitação no banco e
-publica `solicitacao_frete_criada` no Kafka.
-
-### Demo — Fluxo Completo
-```
-POST /demo-fluxo-completo
-```
-Endpoint de demonstração para apresentação em aula. Executa o fluxo completo automaticamente:
-
-| Tempo | Status | Ação |
-|-------|--------|------|
-| 0s | `AGUARDANDO` | Solicitação criada + evento Kafka |
-| ~2s | — | 3 cotações simuladas publicadas |
-| ~5s | `SELECIONADO` | Consumer seleciona menor valor |
-| ~15s | `EM_TRANSITO` | Simulação de despacho |
-| ~35s | `ENTREGUE` | Simulação de entrega finalizada |
-
-### Listar Solicitações
-```
-GET /solicitacoes
-GET /solicitacoes/{id}
-```
-
-### Listar Cotações de uma Solicitação
-```
-GET /solicitacoes/{id}/cotacoes
-```
-
-### Listar Fretes Selecionados
-```
-GET /fretes-selecionados
-```
-
-### Swagger/OpenAPI
-```
-http://localhost:5008/docs
-```
+- **Backend**: Python 3.12, FastAPI, SQLAlchemy (Async), AioKafka.
+- **Frontend**: React, Tailwind CSS (Layout de 2 colunas, Grid Responsiva).
+- **Infraestrutura**: Docker, Docker Compose, Nginx (Gateway).
 
 ---
 
-## Tópicos Kafka
+## Comandos de Infraestrutura (Build & Deploy)
 
-### Publica (Producer)
+Para garantir um ambiente íntegro e previsível, utilizamos os seguintes comandos padrão de manutenção e reset.
 
-| Tópico | Quando |
-|--------|--------|
-| `solicitacao_frete_criada` | Ao receber solicitação de frete (POST /solicitar-externo ou /demo-fluxo-completo) |
-| `frete_selecionado` | Ao selecionar a cotação de menor valor |
-| `logistica_status_atualizado` | A cada transição de status (EM_TRANSITO, ENTREGUE) |
-
-### Consome (Consumer)
-
-| Tópico | Ação |
-|--------|------|
-| `cotacao_frete_enviada` | Recebe cotações das Transportadoras (Equipe 9), grava no banco e seleciona a melhor |
-
-### Envelope Kafka Obrigatório
-
-Todos os eventos seguem o envelope oficial do Portal B2B (seção 17 do Guia de Integração):
-
-```json
-{
-  "eventId": "<UUID v4>",
-  "eventType": "<nome_do_topico>",
-  "eventVersion": "1.0",
-  "timestamp": "<ISO 8601>",
-  "source": "logistica-service",
-  "correlationId": "<UUID v4>",
-  "payload": { ... }
-}
-```
-
----
-
-## Estrutura do Projeto
-
-```
-logistica-b2b/
-├── app/
-│   ├── __init__.py
-│   ├── main.py            # Entrypoint FastAPI + lifespan (Kafka lifecycle)
-│   ├── database.py        # SQLAlchemy async engine (Cloud SQL)
-│   ├── models.py          # Mapeamento das tabelas portal_b2b.*
-│   ├── schemas.py         # Pydantic schemas + envelope Kafka
-│   ├── routes.py          # Rotas REST + endpoint de demo
-│   └── kafka_handler.py   # Producer, Consumer e simulação de rastreio
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── .env                   # Variáveis de ambiente (não versionado)
-├── .env.example           # Template de variáveis
-├── instrucoes_para_equipe_9.md  # Guia de integração para Transportadoras
-└── README.md              # Este arquivo
-```
-
----
-
-## Configuração e Execução
-
-### 1. Criar o `.env`
+**Manutenção e Reset**
 
 ```bash
-cp .env.example .env
-```
+# Reset total (Remoção de órfãos e limpeza de cache)
+docker compose down --remove-orphans && docker system prune -f
 
-O `.env` já contém os valores oficiais:
-
-```env
-SERVICE_NAME=logistica-service
-PORT=5008
-DATABASE_URL=postgresql://svc_portal_b2b:senha_portal_b2b@136.114.235.212:5432/portal_b2b
-DB_SCHEMA=portal_b2b
-KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
-```
-
-### 2. Build e Execução
-
-```bash
-# Criar a rede (se não existir)
-docker network create portal-b2b-network
-
-# Build e subir
+# Build e Deploy Silencioso
 docker compose up -d --build
 ```
 
-### 3. Verificar
+---
 
-```bash
-# Health check
-curl http://localhost:5008/health
+## Integração: Vendas ↔ Logística
 
-# Logs em tempo real
-docker logs -f logistica-service
-```
+O fluxo oficial de acionamento logístico opera de forma assíncrona, guiado a eventos (Event-Driven):
 
-### 4. Testar Fluxo Completo (Demo)
-
-```bash
-curl -X POST http://localhost:5008/demo-fluxo-completo \
-  -H "Content-Type: application/json" \
-  -d '{
-    "pedido_id": "550e8400-e29b-41d4-a716-446655440000",
-    "tipo_transporte": "RODOVIARIO",
-    "cep_origem": "74000000",
-    "cep_destino": "01001000",
-    "tipo_veiculo": "CAMINHAO_TRUNK"
-  }'
-```
-
-Após ~35 segundos, acompanhe a evolução:
-```bash
-# Ver solicitação com cotações
-curl http://localhost:5008/solicitacoes/{id_retornado}
-
-# Ver frete selecionado (vencedor)
-curl http://localhost:5008/fretes-selecionados
-```
+- **O que Vendas fornece**: A emissão do evento `pedido_criado` via Kafka. Este evento é o gatilho principal e contém informações cruciais, como o `pedido_id` (UUID oficial já gravado no Cloud SQL) e os dados logísticos de origem e destino.
+- **O que a Logística consome**: O nosso serviço escuta de forma contínua o tópico de pedidos. Ao receber o evento, o sistema primeiro **valida a existência do pedido** diretamente no banco de dados e, em caso de sucesso, inicia imediatamente o **orquestrador de frete**.
 
 ---
 
-## Banco de Dados
+## Árvore de Entidades (Banco de Dados)
 
-- **Schema:** `portal_b2b`
-- **Tabelas utilizadas** (criadas pela equipe de BD — DDL script 04):
-  - `portal_b2b.solicitacao_frete` — Solicitações de frete
-  - `portal_b2b.cotacao_frete` — Cotações recebidas das transportadoras
-  - `portal_b2b.frete_selecionado` — Frete selecionado (menor valor)
-- **Regra:** O serviço **não executa DDL** (CREATE TABLE, ALTER TABLE). Apenas DML (SELECT, INSERT, UPDATE).
+O nosso modelo de dados reside no schema oficial `portal_b2b` e obedece à seguinte hierarquia:
+
+```mermaid
+erDiagram
+    PEDIDO ||--|| SOLICITACAO_FRETE : "gera"
+    SOLICITACAO_FRETE ||--|{ COTACAO_FRETE : "recebe"
+    EMPRESA ||--|{ COTACAO_FRETE : "oferece"
+    COTACAO_FRETE ||--o| FRETE_SELECIONADO : "torna-se (menor valor)"
+
+    PEDIDO {
+        uuid id
+        string status
+    }
+    SOLICITACAO_FRETE {
+        uuid id
+        uuid pedido_id
+        string status
+    }
+    COTACAO_FRETE {
+        uuid id
+        decimal valor
+        int prazo
+    }
+    EMPRESA {
+        uuid id
+        string nome_fantasia
+        string cnpj
+    }
+```
+
+**Destaques da Modelagem**
+
+- **Integridade Referencial (Foreign Keys)**: Todas as relações são mantidas sob forte rigor relacional. É impossível criar uma solicitação de frete sem um `pedido_id` válido, o que obriga a consistência entre o que Vendas gera e o que a Logística consome.
+- **Desacoplamento de Cotações (`1:N`)**: A tabela de cotações suporta múltiplas ofertas por solicitação. Isso permite que o sistema receba `N` respostas do mercado via Kafka e escale competitivamente sem alterar a modelagem.
+- **Identidade Distribuída (UUID)**: O uso extensivo de UUIDs previne colisões de IDs nos microsserviços do Portal B2B, atuando como o elo de ouro (`correlationId`) entre o Cloud SQL e o Redpanda.
 
 ---
 
-## Ciclo de Vida dos Status
+## Destaque Técnico: Lógica de Diversidade
 
-```
-AGUARDANDO ──▶ SELECIONADO ──(10s)──▶ EM_TRANSITO ──(20s)──▶ ENTREGUE
-```
-
-| Status | Descrição |
-|--------|-----------|
-| `AGUARDANDO` | Solicitação criada, aguardando cotações |
-| `SELECIONADO` | Cotação vencedora escolhida (menor valor) |
-| `EM_TRANSITO` | Carga em transporte (simulado: 10s após seleção) |
-| `ENTREGUE` | Entrega concluída (simulado: 20s após trânsito) |
+Para simular um cenário competitivo realista de mercado, o motor de cotação implementa uma lógica de **distribuição circular (%)**. Esta abordagem algorítmica garante que o sistema utilize **até 3 transportadoras distintas** provenientes do banco de dados oficial em cada simulação de concorrência de frete.
 
 ---
 
-## Dependências
+## Endpoints REST (Documentação)
 
-```
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-sqlalchemy[asyncio]==2.0.36
-asyncpg==0.30.0
-aiokafka==0.12.0
-pydantic==2.10.3
-python-dotenv==1.0.1
-```
+- **Swagger/OpenAPI**: Disponível em `http://localhost:5008/docs` para visualizar todas as rotas ativas (Health Check, Listar Solicitações, etc.).
 
 ---
 
-## Equipe
+## Estado do Projeto: Integração Completa
 
-**Equipe 8 — Logística** | CMP1896 — Sistemas Distribuídos | PUC-GO
+  ✅ Banco de Dados (PostgreSQL Cloud SQL)
+
+- Conexão estabilizada e funcional.
+- Validação de esquemas (CREATE SCHEMA) realizada com sucesso.
+- Integração com a tabela de empresas do portal.
+
+  ✅ Kafka (Redpanda)
+
+- Conexão estabelecida e funcional.
+- Consumo do tópico orders.
+- Validação de eventos.
+
+  ✅ Sistema de Cotação (Lógica de Diversidade)
+
+- Lógica de diversidade implementada com sucesso.
+- Distribuição circular de até 3 transportadoras distintas.
+- Validação de transportadoras cadastradas no banco.
+
+  ✅ Frontend (React)
+
+- Layout de 2 colunas implementado com sucesso.
+- Suporte a scroll vertical para grandes volumes de dados.
+- Mapeamento de nomes amigáveis para transportadoras.
+
+  ✅ Infraestrutura (Docker)
+
+- Docker compose funcional.
+- Build e deploy silencioso.
+- Limpeza de órfãos e cache.
+
+---
