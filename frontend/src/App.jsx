@@ -131,7 +131,7 @@ export default function App() {
         )}
 
         {/* Grid */}
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 max-h-[800px] overflow-y-auto pr-2 pb-4">
           {solicitacoes.map((s) => (
             <SolicitacaoCard key={s.id} solicitacao={s} />
           ))}

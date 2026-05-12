@@ -34,18 +34,20 @@ export default function SolicitacaoCard({ solicitacao }) {
   return (
     <div className="card animate-fade-in flex flex-col gap-4">
       {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-[10px] font-mono text-gray-400 dark:text-slate-500">
-            {s.id}
-          </p>
-          <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-            Pedido {s.pedido_id?.slice(0, 8)}…
-          </p>
+      <div className="flex flex-col gap-2 border-b border-gray-100 pb-3 dark:border-slate-700/50">
+        <div className="flex items-start justify-between gap-2">
+          <div className="break-all">
+            <p className="text-xs font-mono text-gray-500 dark:text-slate-400">
+              <span className="font-semibold text-gray-700 dark:text-gray-300">Solicitação:</span> {s.id}
+            </p>
+            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-1">
+              Pedido ID: {s.pedido_id}
+            </p>
+          </div>
+          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${STATUS_COLORS[s.status] || "bg-gray-100 text-gray-500"}`}>
+            {s.status?.replace("_", " ")}
+          </span>
         </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_COLORS[s.status] || "bg-gray-100 text-gray-500"}`}>
-          {s.status?.replace("_", " ")}
-        </span>
       </div>
 
       {/* Info chips */}
@@ -72,7 +74,7 @@ export default function SolicitacaoCard({ solicitacao }) {
           <div className="space-y-1.5">
             {sorted.map((c, i) => {
               const isWinner = c.id === freteId;
-              const nome = TRANSPORTADORAS[c.transportadora_id] || c.transportadora_id?.slice(0, 8);
+              const nome = TRANSPORTADORAS[c.transportadora_id] || `Transportadora ${c.transportadora_id}`;
 
               return (
                 <div
@@ -90,11 +92,11 @@ export default function SolicitacaoCard({ solicitacao }) {
                       </span>
                     )}
                     <div>
-                      <p className={`font-semibold ${isWinner ? "text-brand-700 dark:text-brand-300" : "text-gray-700 dark:text-gray-300"}`}>
+                      <p className={`font-semibold break-words ${isWinner ? "text-brand-700 dark:text-brand-300" : "text-gray-800 dark:text-gray-200"}`}>
                         {nome}
                       </p>
-                      <p className="text-[10px] text-gray-400 dark:text-slate-500">
-                        {c.prazo} dia{c.prazo > 1 ? "s" : ""} úteis
+                      <p className="text-xs text-gray-500 dark:text-slate-400">
+                        Prazo: {c.prazo} dia{c.prazo > 1 ? "s" : ""} úteis
                       </p>
                     </div>
                   </div>
