@@ -1,5 +1,18 @@
 import { useState, useMemo } from "react";
 
+/** Generates a UUID v4 compatible with insecure (HTTP) contexts. */
+function generateUUID() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // Fallback for insecure contexts (HTTP)
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 const VEICULOS_MAP = {
   FURGAO: { label: "Furgão", icon: "🚐", faixa: "R$ 350–900" },
   CAMINHAO_3_4: { label: "Caminhão ¾", icon: "🚛", faixa: "R$ 800–1.800" },
@@ -40,7 +53,7 @@ export default function SolicitacaoForm({ onSubmit, loading }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const dados = {
-      pedido_id: crypto.randomUUID(),
+      pedido_id: generateUUID(),
       tipo_transporte: form.tipo_transporte,
     };
     if (form.peso_carga) dados.peso_carga = Number(form.peso_carga);
