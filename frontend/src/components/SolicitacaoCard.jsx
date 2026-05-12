@@ -8,6 +8,7 @@ const STATUS_COLORS = {
 };
 
 const TRANSPORTADORAS = {
+  "b32bd9f2-6122-4c84-b721-b284aec606e1": "Transportadora Expressa B2B",
   "aaa11111-1111-1111-1111-111111111111": "TransLog Express",
   "bbb22222-2222-2222-2222-222222222222": "Rodo Frete Brasil",
   "ccc33333-3333-3333-3333-333333333333": "CargoVia Sul",
@@ -74,7 +75,7 @@ export default function SolicitacaoCard({ solicitacao }) {
           <div className="space-y-1.5">
             {sorted.map((c, i) => {
               const isWinner = c.id === freteId;
-              const nome = TRANSPORTADORAS[c.transportadora_id] || `Transportadora ${c.transportadora_id}`;
+              const nome = TRANSPORTADORAS[c.transportadora_id] || "Transportadora Terceirizada";
 
               return (
                 <div
