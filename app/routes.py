@@ -15,13 +15,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.kafka_handler import (
     TOPIC_COTACAO_ENVIADA,
     TOPIC_SOLICITACAO_CRIADA,
     publish_event,
 )
-from app.models import CotacaoFrete, FreteSelecionado, Pedido, SolicitacaoFrete
+from app.models import CotacaoFrete, Empresa, EmpresaPerfil, FreteSelecionado, Pedido, Perfil, SolicitacaoFrete
 from app.schemas import (
     CotacaoFreteResponse,
     FreteSelecionadoResponse,
@@ -216,6 +216,16 @@ async def _simular_cotacoes_background(
     Publica no tópico cotacao_frete_enviada com o envelope oficial,
     fazendo o consumer existente processar cada uma normalmente.
     """
+    # 0. Buscar transportadora real no banco
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Empresa).join(EmpresaPerfil).join(Perfil)
+            .where(Perfil.nome == 'TRANSPORTADORA').limit(1)
+        )
+        transportadora_real = result.scalar()
+        t_id = transportadora_real.id if transportadora_real else "b32bd9f2-6122-4c84-b721-b284aec606e1"
+        t_id = str(t_id)
+
     # Determinar faixas de preço e prazo
     if tipo_veiculo and tipo_veiculo in _FAIXAS_PRECO_VEICULO:
         preco_min, preco_max = _FAIXAS_PRECO_VEICULO[tipo_veiculo]
@@ -232,7 +242,7 @@ async def _simular_cotacoes_background(
     cotacoes_simuladas = []
     for transportadora in _TRANSPORTADORAS_DEMO:
         cotacoes_simuladas.append({
-            "transportadora_id": transportadora["id"],
+            "transportadora_id": t_id,
             "nome": transportadora["nome"],
             "valor": round(random.uniform(preco_min, preco_max), 2),
             "prazo": random.randint(prazo_min, prazo_max),

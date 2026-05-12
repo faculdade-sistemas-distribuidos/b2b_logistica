@@ -35,6 +35,40 @@ from app.database import Base
 SCHEMA = "portal_b2b"
 
 
+class Empresa(Base):
+    """Mapeamento da tabela portal_b2b.empresa."""
+
+    __tablename__ = "empresa"
+    __table_args__ = {"schema": SCHEMA}
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+
+
+class Perfil(Base):
+    """Mapeamento da tabela portal_b2b.perfil."""
+
+    __tablename__ = "perfil"
+    __table_args__ = {"schema": SCHEMA}
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    nome = Column(String(50), nullable=False, unique=True)
+
+
+class EmpresaPerfil(Base):
+    """Mapeamento da tabela portal_b2b.empresa_perfil."""
+
+    __tablename__ = "empresa_perfil"
+    __table_args__ = {"schema": SCHEMA}
+
+    empresa_id = Column(UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.empresa.id"), primary_key=True)
+    perfil_id = Column(UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.perfil.id"), primary_key=True)
+
+
 class Pedido(Base):
     """Mapeamento da tabela portal_b2b.pedido."""
 
