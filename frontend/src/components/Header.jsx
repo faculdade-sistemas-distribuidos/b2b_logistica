@@ -54,6 +54,18 @@ export default function Header({ dark, setDark, health }) {
               </svg>
             )}
           </button>
+
+          {/* Close / Back to Portal */}
+          <button
+            onClick={() => (window.location.href = "/")}
+            className="close-portal-btn flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:border-brand-400 hover:text-brand-400 dark:border-slate-700 dark:text-gray-400 dark:hover:border-brand-400 dark:hover:text-brand-400"
+            aria-label="Fechar Logística e voltar ao Portal"
+            title="Voltar ao Portal"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
         </div>
       </div>
     </header>
