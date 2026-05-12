@@ -426,7 +426,24 @@ async def detalhar_solicitacao(
             detail=f"Solicitação {solicitacao_id} não encontrada.",
         )
 
-    return solicitacao
+    # Buscar frete selecionado via query explícita (não há FK direta entre as tabelas)
+    frete_result = await db.execute(
+        select(FreteSelecionado)
+        .options(selectinload(FreteSelecionado.cotacao))
+        .where(FreteSelecionado.pedido_id == solicitacao.pedido_id)
+    )
+    frete_selecionado = frete_result.scalar_one_or_none()
+
+    # Montar resposta manualmente incluindo o frete selecionado
+    return SolicitacaoFreteResponse(
+        id=solicitacao.id,
+        pedido_id=solicitacao.pedido_id,
+        tipo_transporte=solicitacao.tipo_transporte,
+        status=solicitacao.status,
+        data_criacao=solicitacao.data_criacao,
+        cotacoes=solicitacao.cotacoes,
+        frete_selecionado=frete_selecionado,
+    )
 
 
 # ============================================================

@@ -1,12 +1,15 @@
 """
 models.py — Modelos SQLAlchemy mapeando as tabelas existentes no schema portal_b2b.
 
-Tabelas criadas pela equipe de banco (DDL script 04):
+Tabelas criadas pela equipe de banco (DDL script 04-criacao_tabelas_principais.sql):
   - portal_b2b.solicitacao_frete
   - portal_b2b.cotacao_frete
   - portal_b2b.frete_selecionado
 
-IMPORTANTE: Estes modelos NÃO criam tabelas. Apenas mapeiam a estrutura existente.
+IMPORTANTE:
+  - Estes modelos NÃO criam tabelas. Apenas mapeiam a estrutura existente.
+  - Todos os IDs são UUID com server_default gen_random_uuid().
+  - Todos os modelos apontam para schema "portal_b2b".
 """
 
 import uuid
@@ -48,19 +51,11 @@ class SolicitacaoFrete(Base):
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
     )
 
-    # Relacionamentos
+    # Relacionamento: uma solicitação tem N cotações
     cotacoes = relationship(
         "CotacaoFrete",
         back_populates="solicitacao",
         lazy="selectin",
-    )
-    frete_selecionado = relationship(
-        "FreteSelecionado",
-        back_populates="pedido_rel",
-        uselist=False,
-        lazy="selectin",
-        foreign_keys="FreteSelecionado.pedido_id",
-        primaryjoin="SolicitacaoFrete.pedido_id == FreteSelecionado.pedido_id",
     )
 
 
@@ -88,7 +83,7 @@ class CotacaoFrete(Base):
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
     )
 
-    # Relacionamentos
+    # Relacionamento reverso para solicitação
     solicitacao = relationship(
         "SolicitacaoFrete",
         back_populates="cotacoes",
@@ -117,12 +112,5 @@ class FreteSelecionado(Base):
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
     )
 
-    # Relacionamentos
+    # Relacionamento: frete selecionado → cotação escolhida
     cotacao = relationship("CotacaoFrete", lazy="selectin")
-    pedido_rel = relationship(
-        "SolicitacaoFrete",
-        back_populates="frete_selecionado",
-        uselist=False,
-        foreign_keys=[pedido_id],
-        primaryjoin="FreteSelecionado.pedido_id == SolicitacaoFrete.pedido_id",
-    )
