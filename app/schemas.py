@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field
 class SolicitacaoFreteCreate(BaseModel):
     """Dados para criar uma solicitação de frete (simulação de pedido de vendas)."""
 
-    pedido_id: uuid.UUID = Field(
-        ..., description="UUID do pedido (vindo da equipe de Vendas/Pedidos)"
+    pedido_id: Optional[uuid.UUID] = Field(
+        None, description="UUID do pedido (vindo da equipe de Vendas/Pedidos)"
     )
     tipo_transporte: str = Field(
         ...,

@@ -15,6 +15,7 @@ IMPORTANTE:
 import uuid
 from datetime import datetime
 
+# pyrefly: ignore [missing-import]
 from sqlalchemy import (
     Column,
     DateTime,
@@ -24,12 +25,28 @@ from sqlalchemy import (
     String,
     text,
 )
+# pyrefly: ignore [missing-import]
 from sqlalchemy.dialects.postgresql import UUID
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import relationship
 
 from app.database import Base
 
 SCHEMA = "portal_b2b"
+
+
+class Pedido(Base):
+    """Mapeamento da tabela portal_b2b.pedido."""
+
+    __tablename__ = "pedido"
+    __table_args__ = {"schema": SCHEMA}
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
 
 
 class SolicitacaoFrete(Base):

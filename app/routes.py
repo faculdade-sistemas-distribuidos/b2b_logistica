@@ -21,7 +21,7 @@ from app.kafka_handler import (
     TOPIC_SOLICITACAO_CRIADA,
     publish_event,
 )
-from app.models import CotacaoFrete, FreteSelecionado, SolicitacaoFrete
+from app.models import CotacaoFrete, FreteSelecionado, Pedido, SolicitacaoFrete
 from app.schemas import (
     CotacaoFreteResponse,
     FreteSelecionadoResponse,
@@ -73,9 +73,15 @@ async def solicitar_frete_externo(
     """Cria uma solicitação de frete e publica evento no Kafka."""
     correlation_id = str(uuid.uuid4())
 
+    pedido_id = dados.pedido_id
+    if not pedido_id:
+        result = await db.execute(select(Pedido).limit(1))
+        pedido = result.scalar()
+        pedido_id = pedido.id if pedido else uuid.UUID("8cb22010-3bf9-42f3-8808-ccc9c7786a76")
+
     # 1. Gravar solicitação no banco
     solicitacao = SolicitacaoFrete(
-        pedido_id=dados.pedido_id,
+        pedido_id=pedido_id,
         tipo_transporte=dados.tipo_transporte,
         status="AGUARDANDO",
     )
@@ -323,9 +329,15 @@ async def demo_fluxo_completo(
             tipo_veiculo_final,
         )
 
+    pedido_id = dados.pedido_id
+    if not pedido_id:
+        result = await db.execute(select(Pedido).limit(1))
+        pedido = result.scalar()
+        pedido_id = pedido.id if pedido else uuid.UUID("8cb22010-3bf9-42f3-8808-ccc9c7786a76")
+
     # 1. Gravar solicitação no banco (idêntico ao /solicitar-externo)
     solicitacao = SolicitacaoFrete(
-        pedido_id=dados.pedido_id,
+        pedido_id=pedido_id,
         tipo_transporte=dados.tipo_transporte,
         status="AGUARDANDO",
     )

@@ -53,7 +53,7 @@ export default function SolicitacaoForm({ onSubmit, loading }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const dados = {
-      pedido_id: generateUUID(),
+      pedido_id: "8cb22010-3bf9-42f3-8808-ccc9c7786a76",
       tipo_transporte: form.tipo_transporte,
     };
     if (form.peso_carga) dados.peso_carga = Number(form.peso_carga);
