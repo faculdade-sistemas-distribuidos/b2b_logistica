@@ -8,10 +8,10 @@ const STATUS_COLORS = {
 };
 
 const TRANSPORTADORAS = {
-  "b32bd9f2-6122-4c84-b721-b284aec606e1": "Transportadora Expressa B2B",
-  "aaa11111-1111-1111-1111-111111111111": "TransLog Express",
-  "bbb22222-2222-2222-2222-222222222222": "Rodo Frete Brasil",
-  "ccc33333-3333-3333-3333-333333333333": "CargoVia Sul",
+  "b32bd9f2-6122-4c84-b721-b284aec6072c": "Transportadora Expressa B2B",
+  "fb22af19-4e13-4a1c-b1aa-e9e1e2dc7806": "Goyazes Express",
+  "e7a28570-a7f2-44fa-8141-6ed3c22ef8c3": "Rápido Planalto",
+  "09741881-8585-4ebd-bae0-58a637b8e647": "TransCerrado",
 };
 
 function formatCurrency(v) {
