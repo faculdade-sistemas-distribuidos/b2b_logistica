@@ -29,7 +29,10 @@ from app.schemas import KafkaEnvelope
 
 logger = logging.getLogger("logistica-service.kafka")
 
-KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092")
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
+if not KAFKA_BOOTSTRAP:
+    raise ValueError("A variável de ambiente KAFKA_BOOTSTRAP_SERVERS não está definida.")
+
 SERVICE_NAME = os.getenv("SERVICE_NAME", "logistica-service")
 
 # Tópicos oficiais

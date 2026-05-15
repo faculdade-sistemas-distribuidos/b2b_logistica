@@ -6,7 +6,7 @@
 
 O serviço de Logística encontra-se **100% integrado** ao ecossistema de produção do Portal B2B.
 
-- **Conectividade Validada**: Comunicação em tempo real estabelecida e estabilizada com o banco de dados oficial **PostgreSQL (Cloud SQL)** e o message broker **Kafka (Redpanda)**.
+- **Conectividade Validada**: Comunicação em tempo real estabelecida e estabilizada com o banco de dados oficial **PostgreSQL (Cloud SQL)** e o cluster **Kafka** compartilhado com 3 brokers.
 - **Dashboard Remodelado**: A interface de visualização (front-end) foi totalmente reestruturada para uma experiência profissional, contando agora com um **layout de duas colunas**, suporte nativo a **scroll vertical** para grandes volumes de dados e **mapeamento inteligente de nomes amigáveis** para as transportadoras oficiais cadastradas.
 
 ---
@@ -106,11 +106,11 @@ Para simular um cenário competitivo realista de mercado, o motor de cotação i
 - Validação de esquemas (CREATE SCHEMA) realizada com sucesso.
 - Integração com a tabela de empresas do portal.
 
-  ✅ Kafka (Redpanda)
+  ✅ Kafka (Cluster)
 
-- Conexão estabelecida e funcional.
-- Consumo do tópico orders.
-- Validação de eventos.
+- Conexão estabilizada e funcional com o cluster remoto (`10.128.0.2:9092, 10.128.0.3:9092, 10.128.0.4:9092`).
+- **Nota Técnica**: O serviço agora opera em um ambiente de cluster com múltiplos brokers para garantir a resiliência das mensagens.
+- Consumo e publicação validados nos tópicos oficiais: `solicitacao_frete_criada`, `cotacao_frete_enviada`, e `frete_selecionado`.
 
   ✅ Sistema de Cotação (Lógica de Diversidade)
 
