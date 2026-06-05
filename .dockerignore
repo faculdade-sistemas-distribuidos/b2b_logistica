@@ -16,3 +16,10 @@ venv/
 Banco/
 Infra/
 Produtos/
+# Exclui o diretorio do frontend do contexto de build do backend.
+# O Dockerfile do backend nao tem relacao com o Node.js/React.
+# Sem esta entrada, o COPY . . copiaria frontend/node_modules/ (centenas de MB)
+# para dentro da imagem python:3.11-slim, inflando o build sem nenhum beneficio.
+frontend/
+node_modules/
+dist/
