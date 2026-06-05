@@ -61,6 +61,17 @@ class SolicitacaoFreteCreate(BaseModel):
     )
 
 
+class ContratarFreteRequest(BaseModel):
+    """Payload para contratação manual de um frete (escolha explícita do Demandas)."""
+
+    solicitacao_id: uuid.UUID = Field(
+        ..., description="UUID da solicitação de frete gerada na etapa de cotação"
+    )
+    cotacao_id: uuid.UUID = Field(
+        ..., description="UUID da cotação escolhida pelo operador / microsserviço de Demandas"
+    )
+
+
 # ============================================================
 # Schemas de Resposta
 # ============================================================

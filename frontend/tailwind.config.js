@@ -5,17 +5,32 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Midnight Green — cor primária do projeto Raiky (SDI.Micro.Produto — PUC-GO)
+        // #075056 — HSL(185, 85%, 18%)
         brand: {
-          50: "#edfcf0",
-          100: "#d4f7db",
-          200: "#acefba",
-          300: "#76e28f",
-          400: "#4cc465",
-          500: "#24a843",
-          600: "#178a34",
-          700: "#146d2c",
-          800: "#145626",
-          900: "#124721",
+          50:  "#effbfc",
+          100: "#d6f5f7",
+          200: "#a8e9ee",
+          300: "#5dd4dd",
+          400: "#1ab5c0",
+          500: "#0c93a0",
+          600: "#097a87",
+          700: "#075056", // Midnight Green — cor âncora do Raiky
+          800: "#064047",
+          900: "#042c30",
+        },
+        // Orange CTA — cor de destaque do projeto Raiky — #FF5B04 HSL(21, 100%, 51%)
+        orange: {
+          50:  "#fff4ee",
+          100: "#ffe3ce",
+          200: "#ffc39a",
+          300: "#ff9a5c",
+          400: "#ff7424",
+          500: "#ff5b04", // CTA Orange — #FF5B04
+          600: "#e04500",
+          700: "#ba3500",
+          800: "#962800",
+          900: "#7a1d00",
         },
       },
       fontFamily: {

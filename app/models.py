@@ -81,6 +81,7 @@ class Pedido(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
+    status = Column(String(30), nullable=False)
 
 
 class SolicitacaoFrete(Base):

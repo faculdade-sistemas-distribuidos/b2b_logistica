@@ -18,11 +18,14 @@ from sqlalchemy.orm import selectinload
 from app.database import AsyncSessionLocal, get_db
 from app.kafka_handler import (
     TOPIC_COTACAO_ENVIADA,
+    TOPIC_FRETE_CONTRATADO,
     TOPIC_SOLICITACAO_CRIADA,
     publish_event,
+    _simular_rastreio,
 )
 from app.models import CotacaoFrete, Empresa, EmpresaPerfil, FreteSelecionado, Pedido, Perfil, SolicitacaoFrete
 from app.schemas import (
+    ContratarFreteRequest,
     CotacaoFreteResponse,
     FreteSelecionadoResponse,
     HealthResponse,
@@ -73,11 +76,13 @@ async def solicitar_frete_externo(
     """Cria uma solicitação de frete e publica evento no Kafka."""
     correlation_id = str(uuid.uuid4())
 
+    if not dados.pedido_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="pedido_id é obrigatório."
+        )
+
     pedido_id = dados.pedido_id
-    if not pedido_id:
-        result = await db.execute(select(Pedido).limit(1))
-        pedido = result.scalar()
-        pedido_id = pedido.id if pedido else uuid.UUID("8cb22010-3bf9-42f3-8808-ccc9c7786a76")
 
     # 1. Gravar solicitação no banco
     solicitacao = SolicitacaoFrete(
@@ -299,41 +304,37 @@ async def _simular_cotacoes_background(
 
 
 @router.post(
-    "/demo-fluxo-completo",
+    "/demo-iniciar-cotacao",
     response_model=SolicitacaoFreteResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["Demo"],
-    summary="Demo: fluxo completo com rastreio simulado",
+    summary="Demo Etapa 1: Iniciar cotação de frete",
     description=(
-        "Endpoint de demonstração para apresentação em aula.\n\n"
-        "Executa o **fluxo completo** automaticamente, percorrendo todos os estados:\n\n"
-        "| Tempo | Estado | Ação |\n"
-        "|-------|--------|------|\n"
-        "| 0s | `AGUARDANDO` | Solicitação criada + evento `solicitacao_frete_criada` |\n"
-        "| ~2s | — | 3 cotações simuladas publicadas (valores aleatórios R$500–R$2000) |\n"
-        "| ~5s | `SELECIONADO` | Consumer seleciona menor valor + evento `frete_selecionado` |\n"
-        "| ~15s | `EM_TRANSITO` | Simulação de despacho da carga |\n"
-        "| ~35s | `ENTREGUE` | Simulação de entrega finalizada |\n\n"
-        "**Acompanhe em tempo real** via polling em `GET /solicitacoes/{id}`."
+        "Etapa 1 do novo fluxo descentralizado.\n\n"
+        "Cria uma solicitação, gera 3 cotações de transportadoras reais "
+        "e **para em status `COTADO`**.\n\n"
+        "O operador deve escolher uma cotação e confirmar via `POST /demo-contratar-frete`."
     ),
 )
-async def demo_fluxo_completo(
+async def demo_iniciar_cotacao(
     dados: SolicitacaoFreteCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Cria solicitação de frete e dispara cotações simuladas automaticamente.
-
-    O fluxo completo é executado em ~35 segundos:
-      - Solicitação gravada e evento publicado imediatamente
-      - 3 cotações simuladas com valores aleatórios (R$500-R$2000)
-      - Consumer processa e seleciona a mais barata
-      - Rastreio simulado: EM_TRANSITO (5s) → ENTREGUE (10s)
+    Cria solicitação de frete, gera 3 cotações e aguarda seleção manual.
     """
     correlation_id = str(uuid.uuid4())
 
-    # 0. Triagem automática de veículo por peso (regras BR)
+    if not dados.pedido_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="pedido_id é obrigatório."
+        )
+
+    pedido_id = dados.pedido_id
+
+    # 0. Triagem automática de veículo por peso
     tipo_veiculo_final = dados.tipo_veiculo
     if dados.peso_carga is not None and not dados.tipo_veiculo:
         tipo_veiculo_final = selecionar_veiculo_por_peso(
@@ -346,13 +347,7 @@ async def demo_fluxo_completo(
             tipo_veiculo_final,
         )
 
-    pedido_id = dados.pedido_id
-    if not pedido_id:
-        result = await db.execute(select(Pedido).limit(1))
-        pedido = result.scalar()
-        pedido_id = pedido.id if pedido else uuid.UUID("8cb22010-3bf9-42f3-8808-ccc9c7786a76")
-
-    # 1. Gravar solicitação no banco (idêntico ao /solicitar-externo)
+    # 1. Gravar solicitação
     solicitacao = SolicitacaoFrete(
         pedido_id=pedido_id,
         tipo_transporte=dados.tipo_transporte,
@@ -376,16 +371,12 @@ async def demo_fluxo_completo(
     }
     if tipo_veiculo_final:
         payload["tipo_veiculo"] = tipo_veiculo_final
-    if dados.tipo_carga:
-        payload["tipo_carga"] = dados.tipo_carga
     if dados.cep_origem:
         payload["cep_origem"] = dados.cep_origem
     if dados.cep_destino:
         payload["cep_destino"] = dados.cep_destino
     if dados.peso_carga is not None:
         payload["peso_carga"] = str(dados.peso_carga)
-    if dados.tipo_carga_natureza:
-        payload["tipo_carga_natureza"] = dados.tipo_carga_natureza
 
     await publish_event(
         topic=TOPIC_SOLICITACAO_CRIADA,
@@ -393,19 +384,145 @@ async def demo_fluxo_completo(
         correlation_id=correlation_id,
     )
 
-    # 3. Disparar cotações simuladas em background
-    #    Isso acontece APÓS a resposta HTTP ser enviada ao cliente
+    # 3. Disparar geração das 3 cotações em background e marcar como COTADO
     background_tasks.add_task(
-        _simular_cotacoes_background,
+        _simular_cotacoes_e_parar,
         solicitacao_id=str(solicitacao.id),
         correlation_id=correlation_id,
         tipo_veiculo=tipo_veiculo_final,
     )
 
+    return solicitacao
+
+
+async def _simular_cotacoes_e_parar(
+    solicitacao_id: str,
+    correlation_id: str,
+    tipo_veiculo: str | None = None,
+) -> None:
+    """
+    Gera 3 cotações, grava no banco, atualiza status para COTADO e **para**.
+    Não seleciona automaticamente — aguarda decisão explícita via /demo-contratar-frete.
+    """
+    await _simular_cotacoes_background(
+        solicitacao_id=solicitacao_id,
+        correlation_id=correlation_id,
+        tipo_veiculo=tipo_veiculo,
+    )
+    # Após gerar as cotações, aguardar o consumer processar e atualizar status para COTADO
+    await asyncio.sleep(4)
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            result = await session.execute(
+                select(SolicitacaoFrete).where(
+                    SolicitacaoFrete.id == uuid.UUID(solicitacao_id)
+                )
+            )
+            sol = result.scalar_one_or_none()
+            if sol and sol.status == "AGUARDANDO":
+                sol.status = "COTADO"
+                logger.info(
+                    "[DEMO] Status atualizado para COTADO: solicitacao=%s", solicitacao_id
+                )
+
+
+@router.post(
+    "/demo-contratar-frete",
+    response_model=SolicitacaoFreteResponse,
+    tags=["Demo"],
+    summary="Demo Etapa 2: Confirmar contratação de frete",
+    description=(
+        "Etapa 2 do novo fluxo descentralizado.\n\n"
+        "Recebe a cotação escolhida pelo operador, grava o `frete_selecionado` "
+        "no banco e inicia a simulação de rastreio (`SELECIONADO` → `EM_TRANSITO` → `ENTREGUE`)."
+    ),
+)
+async def demo_contratar_frete(
+    dados: ContratarFreteRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Registra a cotação escolhida e inicia o rastreio simulado."""
+    correlation_id = str(uuid.uuid4())
+
+    # 1. Buscar solicitação
+    result = await db.execute(
+        select(SolicitacaoFrete).where(SolicitacaoFrete.id == dados.solicitacao_id)
+    )
+    solicitacao = result.scalar_one_or_none()
+    if solicitacao is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Solicitação {dados.solicitacao_id} não encontrada.",
+        )
+
+    if solicitacao.status not in ("AGUARDANDO", "COTADO"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Solicitação já processada (status atual: {solicitacao.status}).",
+        )
+
+    # 2. Verificar se a cotação pertence a esta solicitação
+    result = await db.execute(
+        select(CotacaoFrete).where(
+            CotacaoFrete.id == dados.cotacao_id,
+            CotacaoFrete.solicitacao_id == dados.solicitacao_id,
+        )
+    )
+    cotacao = result.scalar_one_or_none()
+    if cotacao is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cotação {dados.cotacao_id} não encontrada para esta solicitação.",
+        )
+
+    # 3. Verificar duplicidade
+    result = await db.execute(
+        select(FreteSelecionado).where(
+            FreteSelecionado.pedido_id == solicitacao.pedido_id
+        )
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este pedido já possui um frete contratado.",
+        )
+
+    # 4. Gravar frete selecionado e atualizar status
+    frete = FreteSelecionado(
+        pedido_id=solicitacao.pedido_id,
+        cotacao_id=cotacao.id,
+    )
+    db.add(frete)
+    solicitacao.status = "SELECIONADO"
+    await db.commit()
+    await db.refresh(solicitacao)
+
     logger.info(
-        "[DEMO] Resposta enviada. Cotações simuladas serão publicadas em ~2s. "
-        "Veículo: %s",
-        tipo_veiculo_final or "(não especificado)",
+        "[DEMO] Frete contratado: pedido=%s cotacao=%s valor=%s",
+        solicitacao.pedido_id, cotacao.id, cotacao.valor,
+    )
+
+    # 5. Publicar evento frete_contratado no Kafka (para integração real com Demandas)
+    await publish_event(
+        topic=TOPIC_FRETE_CONTRATADO,
+        correlation_id=correlation_id,
+        payload={
+            "pedido_id": str(solicitacao.pedido_id),
+            "solicitacao_id": str(solicitacao.id),
+            "cotacao_id": str(cotacao.id),
+            "transportadora_id": str(cotacao.transportadora_id),
+            "valor": str(cotacao.valor),
+            "prazo": cotacao.prazo,
+        },
+    )
+
+    # 6. Disparar rastreio em background (não bloqueia a resposta HTTP)
+    asyncio.create_task(
+        _simular_rastreio(
+            solicitacao_id=str(solicitacao.id),
+            pedido_id=str(solicitacao.pedido_id),
+            correlation_id=correlation_id,
+        )
     )
 
     return solicitacao

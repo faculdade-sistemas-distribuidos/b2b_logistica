@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
-from app.models import CotacaoFrete, FreteSelecionado, SolicitacaoFrete
+from app.models import CotacaoFrete, FreteSelecionado, Pedido, SolicitacaoFrete
 from app.schemas import KafkaEnvelope
 
 logger = logging.getLogger("logistica-service.kafka")
@@ -39,10 +39,14 @@ SERVICE_NAME = os.getenv("SERVICE_NAME", "logistica-service")
 TOPIC_SOLICITACAO_CRIADA = "solicitacao_frete_criada"
 TOPIC_COTACAO_ENVIADA = "cotacao_frete_enviada"
 TOPIC_FRETE_SELECIONADO = "frete_selecionado"
+# Novos tópicos — fluxo descentralizado (Demandas)
+TOPIC_COTACOES_DISPONIVEIS = "cotacoes_frete_disponiveis"  # Logística → Demandas
+TOPIC_FRETE_CONTRATADO = "frete_contratado"               # Demandas → Logística
 
 # Instâncias globais gerenciadas pelo lifespan do FastAPI
 producer: AIOKafkaProducer | None = None
 consumer: AIOKafkaConsumer | None = None
+consumer_contratado: AIOKafkaConsumer | None = None
 
 
 # ============================================================
@@ -121,8 +125,8 @@ async def publish_event(
 # ============================================================
 
 async def start_consumer() -> None:
-    """Inicia o consumer Kafka para o tópico cotacao_frete_enviada."""
-    global consumer
+    """Inicia o consumer Kafka para cotacao_frete_enviada e frete_contratado."""
+    global consumer, consumer_contratado
     try:
         consumer = AIOKafkaConsumer(
             TOPIC_COTACAO_ENVIADA,
@@ -133,34 +137,49 @@ async def start_consumer() -> None:
             enable_auto_commit=True,
         )
         await consumer.start()
-        logger.info(
-            "Kafka consumer iniciado. Tópico: %s", TOPIC_COTACAO_ENVIADA
-        )
+        logger.info("Kafka consumer iniciado. Tópico: %s", TOPIC_COTACAO_ENVIADA)
     except Exception as e:
-        logger.error("Falha ao iniciar Kafka consumer: %s", e)
+        logger.error("Falha ao iniciar consumer (cotacao_frete_enviada): %s", e)
         consumer = None
+
+    try:
+        consumer_contratado = AIOKafkaConsumer(
+            TOPIC_FRETE_CONTRATADO,
+            bootstrap_servers=KAFKA_BOOTSTRAP,
+            group_id=f"{SERVICE_NAME}-contratado-group",
+            value_deserializer=lambda v: json.loads(v.decode("utf-8")),
+            auto_offset_reset="earliest",
+            enable_auto_commit=True,
+        )
+        await consumer_contratado.start()
+        logger.info("Kafka consumer iniciado. Tópico: %s", TOPIC_FRETE_CONTRATADO)
+    except Exception as e:
+        logger.error("Falha ao iniciar consumer (frete_contratado): %s", e)
+        consumer_contratado = None
 
 
 async def stop_consumer() -> None:
-    """Para o consumer Kafka."""
-    global consumer
+    """Para ambos os consumers Kafka."""
+    global consumer, consumer_contratado
     if consumer:
         await consumer.stop()
         consumer = None
-        logger.info("Kafka consumer encerrado.")
+        logger.info("Kafka consumer (cotacao_frete_enviada) encerrado.")
+    if consumer_contratado:
+        await consumer_contratado.stop()
+        consumer_contratado = None
+        logger.info("Kafka consumer (frete_contratado) encerrado.")
 
 
 async def consume_loop() -> None:
     """
-    Loop principal do consumer.
+    Loop principal do consumer de cotacao_frete_enviada.
 
-    Processa mensagens do tópico cotacao_frete_enviada:
-      1. Extrai payload da cotação
-      2. Grava cotacao_frete no banco
-      3. Verifica se é a melhor cotação (menor valor) e seleciona
+    Grava cotacoes recebidas no banco. Não seleciona automaticamente —
+    a seleção ocorre apenas via frete_contratado (decisão explícita do Demandas).
     """
     if consumer is None:
-        logger.warning("Consumer não inicializado. Loop abortado.")
+        logger.warning("Consumer (cotacao_frete_enviada) não inicializado. Loop abortado.")
         return
 
     logger.info("Consumer loop iniciado. Aguardando cotações...")
@@ -177,7 +196,38 @@ async def consume_loop() -> None:
                     exc_info=True,
                 )
     except Exception as e:
-        logger.error("Consumer loop encerrado com erro: %s", e)
+        logger.error("Consumer loop (cotacao_frete_enviada) encerrado com erro: %s", e)
+
+
+async def consume_contratado_loop() -> None:
+    """
+    Loop consumer do tópico frete_contratado.
+
+    Quando o Demandas confirma a escolha de uma cotação, este consumer:
+      1. Lê solicitacao_id e cotacao_id do payload
+      2. Grava frete_selecionado no banco
+      3. Atualiza status para SELECIONADO
+      4. Dispara simulação de rastreio (EM_TRANSITO → ENTREGUE)
+    """
+    if consumer_contratado is None:
+        logger.warning("Consumer (frete_contratado) não inicializado. Loop abortado.")
+        return
+
+    logger.info("Consumer loop (frete_contratado) iniciado. Aguardando contratos...")
+
+    try:
+        async for msg in consumer_contratado:
+            try:
+                await _process_frete_contratado_message(msg.value)
+            except Exception as e:
+                logger.error(
+                    "Erro ao processar frete_contratado (offset=%s): %s",
+                    msg.offset,
+                    e,
+                    exc_info=True,
+                )
+    except Exception as e:
+        logger.error("Consumer loop (frete_contratado) encerrado com erro: %s", e)
 
 
 async def _process_cotacao_message(message: dict) -> None:
@@ -239,12 +289,9 @@ async def _process_cotacao_message(message: dict) -> None:
             session.add(cotacao)
             await session.flush()
 
-            logger.info("Cotação gravada: id=%s", cotacao.id)
-
-            # 3. Selecionar a melhor cotação (menor valor)
-            await _selecionar_melhor_cotacao(
-                session, solicitacao, correlation_id
-            )
+            logger.info("Cotação gravada: id=%s valor=%s", cotacao.id, cotacao.valor)
+            # Nota: seleção automática removida. O Demandas decide qual cotação contratar
+            # publicando no tópico frete_contratado.
 
 
 async def _selecionar_melhor_cotacao(
@@ -330,6 +377,116 @@ async def _selecionar_melhor_cotacao(
     )
 
     # Disparar simulação de rastreio (EM_TRANSITO → ENTREGUE) em background
+    asyncio.create_task(
+        _simular_rastreio(
+            solicitacao_id=str(solicitacao.id),
+            pedido_id=str(solicitacao.pedido_id),
+            correlation_id=correlation_id,
+        )
+    )
+
+
+async def _process_frete_contratado_message(message: dict) -> None:
+    """
+    Processa evento frete_contratado publicado pelo Demandas.
+
+    Payload esperado:
+      - solicitacao_id (UUID)
+      - cotacao_id     (UUID da cotação escolhida)
+    """
+    payload = message.get("payload", {})
+    correlation_id = message.get("correlationId", str(uuid.uuid4()))
+
+    solicitacao_id = payload.get("solicitacao_id")
+    cotacao_id = payload.get("cotacao_id")
+
+    if not all([solicitacao_id, cotacao_id]):
+        logger.warning(
+            "[frete_contratado] Payload incompleto — necessário solicitacao_id e cotacao_id: %s",
+            payload,
+        )
+        return
+
+    logger.info(
+        "[frete_contratado] Contrato recebido: solicitacao=%s cotacao=%s",
+        solicitacao_id, cotacao_id,
+    )
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            # Buscar solicitação
+            result = await session.execute(
+                select(SolicitacaoFrete).where(
+                    SolicitacaoFrete.id == uuid.UUID(str(solicitacao_id))
+                )
+            )
+            solicitacao = result.scalar_one_or_none()
+            if solicitacao is None:
+                logger.error(
+                    "[frete_contratado] Solicitação %s não encontrada. Contrato ignorado.",
+                    solicitacao_id,
+                )
+                return
+
+            # Buscar cotação específica
+            result = await session.execute(
+                select(CotacaoFrete).where(
+                    CotacaoFrete.id == uuid.UUID(str(cotacao_id)),
+                    CotacaoFrete.solicitacao_id == uuid.UUID(str(solicitacao_id)),
+                )
+            )
+            cotacao = result.scalar_one_or_none()
+            if cotacao is None:
+                logger.error(
+                    "[frete_contratado] Cotação %s não encontrada para a solicitação %s.",
+                    cotacao_id, solicitacao_id,
+                )
+                return
+
+            # Verificar se já existe frete selecionado
+            result = await session.execute(
+                select(FreteSelecionado).where(
+                    FreteSelecionado.pedido_id == solicitacao.pedido_id
+                )
+            )
+            frete_existente = result.scalar_one_or_none()
+
+            if frete_existente:
+                logger.warning(
+                    "[frete_contratado] Pedido %s já possui frete selecionado. Ignorando.",
+                    solicitacao.pedido_id,
+                )
+                return
+
+            # Gravar frete selecionado
+            frete = FreteSelecionado(
+                pedido_id=solicitacao.pedido_id,
+                cotacao_id=cotacao.id,
+            )
+            session.add(frete)
+            solicitacao.status = "SELECIONADO"
+            await session.flush()
+
+            logger.info(
+                "[frete_contratado] Frete contratado: pedido=%s cotacao=%s valor=%s",
+                solicitacao.pedido_id, cotacao.id, cotacao.valor,
+            )
+
+    # Publicar frete_selecionado
+    await publish_event(
+        topic=TOPIC_FRETE_SELECIONADO,
+        correlation_id=correlation_id,
+        payload={
+            "pedido_id": str(solicitacao.pedido_id),
+            "solicitacao_id": str(solicitacao.id),
+            "cotacao_id": str(cotacao.id),
+            "transportadora_id": str(cotacao.transportadora_id),
+            "valor": str(cotacao.valor),
+            "prazo": cotacao.prazo,
+        },
+    )
+
+    # Disparar rastreio
     asyncio.create_task(
         _simular_rastreio(
             solicitacao_id=str(solicitacao.id),

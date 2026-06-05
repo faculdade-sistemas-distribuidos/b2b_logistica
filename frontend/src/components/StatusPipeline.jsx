@@ -8,6 +8,7 @@ const STEPS = [
 
 function statusIndex(status) {
   if (status === "AGUARDANDO") return 0;
+  if (status === "COTADO") return 1;
   if (status === "SELECIONADO") return 2;
   if (status === "EM_TRANSITO") return 3;
   if (status === "ENTREGUE") return 4;

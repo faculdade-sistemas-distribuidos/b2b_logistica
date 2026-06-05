@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.kafka_handler import (
+    consume_contratado_loop,
     consume_loop,
     start_consumer,
     start_producer,
@@ -49,9 +50,10 @@ async def lifespan(app: FastAPI):
     # Iniciar Kafka producer
     await start_producer()
 
-    # Iniciar Kafka consumer e rodar loop em background
+    # Iniciar consumers (cotacao_frete_enviada + frete_contratado) e rodar em background
     await start_consumer()
     consumer_task = asyncio.create_task(consume_loop())
+    consumer_contratado_task = asyncio.create_task(consume_contratado_loop())
 
     logger.info("=== logistica-service pronto na porta 5008 ===")
 
@@ -60,8 +62,13 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("=== logistica-service encerrando ===")
     consumer_task.cancel()
+    consumer_contratado_task.cancel()
     try:
         await consumer_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await consumer_contratado_task
     except asyncio.CancelledError:
         pass
 
@@ -74,12 +81,11 @@ app = FastAPI(
     title="Logística Service — Portal B2B",
     description=(
         "Microsserviço de Logística (Equipe 8) do Portal B2B.\n\n"
-        "Responsável por:\n"
-        "- Receber solicitações de frete (simulação de pedido de vendas)\n"
-        "- Publicar evento solicitacao_frete_criada no Kafka\n"
-        "- Consumir cotacoes de transportadoras (cotacao_frete_enviada)\n"
-        "- Selecionar a melhor cotação (menor valor)\n"
-        "- Publicar evento frete_selecionado no Kafka"
+        "Fluxo descentralizado (v2):\n"
+        "- Recebe solicitações de cotação do Demandas\n"
+        "- Gera 3 cotações de transportadoras reais e publica cotacoes_frete_disponiveis\n"
+        "- Aguarda decisão explícita do Demandas via tópico frete_contratado\n"
+        "- Grava frete_selecionado e inicia simulação de rastreio (EM_TRANSITO → ENTREGUE)"
     ),
     version="1.0.0",
     lifespan=lifespan,

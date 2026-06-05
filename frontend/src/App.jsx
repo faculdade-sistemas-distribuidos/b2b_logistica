@@ -69,17 +69,28 @@ export default function App() {
     return () => clearInterval(id);
   }, [solicitacoes.map((s) => `${s.id}:${s.status}`).join(",")]);
 
-  // Create demo
+  // Etapa 1: inicia cotação
   const handleCreate = async (dados) => {
     setLoading(true);
     try {
-      const created = await api.criarDemo(dados);
+      const created = await api.iniciarCotacao(dados);
       detailCache.current[created.id] = created;
       setSolicitacoes((prev) => [created, ...prev]);
       setFormOpen(false);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Etapa 2: após contratar, força re-fetch imediato para atualizar o card
+  const handleContratar = async (solicitacaoId) => {
+    try {
+      const detail = await api.detalharSolicitacao(solicitacaoId);
+      detailCache.current[solicitacaoId] = detail;
+      setSolicitacoes((prev) =>
+        prev.map((x) => (x.id === detail.id ? detail : x))
+      );
+    } catch { /* silent */ }
   };
 
   const activeCount = solicitacoes.filter((s) => s.status !== "ENTREGUE").length;
@@ -133,7 +144,7 @@ export default function App() {
         {/* Grid */}
         <div className="grid gap-6 grid-cols-1 md:grid-cols-2 max-h-[800px] overflow-y-auto pr-2 pb-4">
           {solicitacoes.map((s) => (
-            <SolicitacaoCard key={s.id} solicitacao={s} />
+            <SolicitacaoCard key={s.id} solicitacao={s} onContratar={handleContratar} />
           ))}
         </div>
       </main>
