@@ -61,6 +61,17 @@ docker network create portal-b2b-network
 
 ---
 
+## Mapeamento de Portas
+
+As portas abaixo sao as oficiais definidas pela equipe de infraestrutura do Portal B2B e nao podem ser alteradas sem autorizacao.
+
+| Container | Porta no host | Porta interna | Descricao |
+|---|---|---|---|
+| `logistica-service` | `5008` | `5008` | API REST do backend (FastAPI + Uvicorn) |
+| `logistica-front` | `8088` | `80` | Frontend React servido pelo Nginx |
+
+---
+
 ## Variaveis de Ambiente
 
 Copie o arquivo de exemplo e preencha os valores conforme o ambiente:
@@ -75,7 +86,7 @@ cp .env.example .env
 | `PORT` | Porta interna do container backend | `5008` |
 | `DATABASE_URL` | String de conexao PostgreSQL (formato `postgresql://user:senha@host:porta/banco`) | `postgresql://svc_portal_b2b:senha@host:5432/portal_b2b` |
 | `DB_SCHEMA` | Schema do banco de dados utilizado | `portal_b2b` |
-| `KAFKA_BOOTSTRAP_SERVERS` | Lista de brokers Kafka separados por virgula | `10.128.0.2:9092,10.128.0.3:9092` |
+| `KAFKA_BOOTSTRAP_SERVERS` | Lista de brokers Kafka separados por virgula (cluster com 3 brokers) | `10.128.0.2:9092,10.128.0.3:9092,10.128.0.4:9092` |
 | `ROOT_PATH` | Prefixo de rota para o FastAPI (usado pelo gateway) | `/api/logistica` |
 | `JWT_SECRET` | Segredo para validacao de tokens JWT emitidos pelo portal de autenticacao | — |
 | `JWT_ISSUER` | Emissor esperado no claim `iss` do JWT | `portal-autenticacao` |
@@ -199,10 +210,18 @@ Todas as mensagens seguem o envelope padrao do Portal B2B com os campos: `eventI
 
 A documentacao interativa completa esta disponivel em:
 
-- Swagger UI: `http://localhost:5008/docs`
-- OpenAPI JSON: `http://localhost:5008/openapi.json`
+| Ambiente | Swagger UI | OpenAPI JSON |
+|---|---|---|
+| Desenvolvimento local | `http://localhost:5008/docs` | `http://localhost:5008/openapi.json` |
+| Integracao (Load Balancer) | `http://34.8.17.245/api/logistica/docs` | `http://34.8.17.245/api/logistica/openapi.json` |
 
-Quando acessado via gateway, o prefixo `/api/logistica` e aplicado automaticamente conforme a variavel `ROOT_PATH`.
+O gateway da infraestrutura remove o prefixo `/api/logistica/` antes de encaminhar a requisicao para o container `logistica-service:5008`. O FastAPI recebe apenas o caminho interno (ex: `/health`, `/solicitacoes`), pois o prefixo e injetado pela variavel `ROOT_PATH` no Uvicorn.
+
+Para validar a integracao diretamente pelo Load Balancer:
+
+```bash
+curl http://34.8.17.245/api/logistica/health
+```
 
 | Metodo | Rota | Descricao |
 |---|---|---|
@@ -232,10 +251,11 @@ As tabelas mapeadas no schema `portal_b2b` sao:
 
 ## Acesso ao Frontend
 
-Em ambiente de desenvolvimento local (sem o gateway do Portal B2B), o frontend esta disponivel em:
+| Ambiente | URL |
+|---|---|
+| Desenvolvimento local | `http://localhost:8088/logistica/` |
+| Integracao (Load Balancer oficial) | `http://34.8.17.245/logistica/` |
 
-```
-http://localhost:8088/logistica/
-```
+Em ambiente local, o Nginx do container `logistica-front` (porta `8088`) faz proxy das requisicoes `/api/logistica/*` diretamente para o backend `logistica-service:5008` dentro da rede Docker, dispensando o gateway externo.
 
-O Nginx do container `logistica-front` faz proxy das requisicoes `/api/logistica/*` diretamente para o backend `logistica-service:5008` dentro da rede Docker, sem dependencia do gateway externo.
+Em producao e integracao, o Load Balancer `34.8.17.245` roteia `/logistica/` para o container `logistica-front` e `/api/logistica/` para o container `logistica-service`. Os IPs das VMs individuais (`34.29.84.207` e `34.59.229.37`) devem ser usados apenas para diagnostico direto, nao como endpoint oficial.
