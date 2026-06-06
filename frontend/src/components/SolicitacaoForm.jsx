@@ -53,14 +53,14 @@ export default function SolicitacaoForm({ onSubmit, loading }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const dados = {
-      pedido_id: "8cb22010-3bf9-42f3-8808-ccc9c7786a76",
+      pedido_id: generateUUID(),           // UUID único gerado a cada clique — sem colisão com o Demandas
       tipo_transporte: form.tipo_transporte,
     };
-    if (form.peso_carga) dados.peso_carga = Number(form.peso_carga);
-    if (form.tipo_carga_natureza) dados.tipo_carga_natureza = form.tipo_carga_natureza;
+    dados.peso_carga          = form.peso_carga          ? Number(form.peso_carga) : 1234.56;
+    dados.tipo_carga_natureza = form.tipo_carga_natureza || "SECA_GERAL";
     if (form.tipo_carga) dados.tipo_carga = form.tipo_carga;
-    if (form.cep_origem) dados.cep_origem = form.cep_origem;
-    if (form.cep_destino) dados.cep_destino = form.cep_destino;
+    dados.cep_origem  = form.cep_origem  || "01310100"; // Av. Paulista, SP
+    dados.cep_destino = form.cep_destino || "20040020"; // Cinelândia, RJ
     onSubmit(dados);
   };
 
