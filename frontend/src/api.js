@@ -81,27 +81,125 @@ async function request(path, options = {}) {
 // ============================================================
 // API Surface — Fluxo descentralizado (Etapa 1 + Etapa 2)
 // ============================================================
+
+// --- INÍCIO DA CAMADA DE MOCK (ISOLAMENTO DA DEMO) ---
+const mockDb = {
+  solicitacoes: [], // Armazena apenas solicitações geradas pela Demo
+};
+
+function generateUUID() {
+  return crypto.randomUUID();
+}
+
+function simulateDelay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+// --- FIM DA CAMADA DE MOCK ---
+
 export const api = {
   health: () => request("/health"),
 
   // Etapa 1: cria solicitação e gera cotações → para em COTADO
-  iniciarCotacao: (dados) =>
-    request("/demo-iniciar-cotacao", {
-      method: "POST",
-      body: JSON.stringify(dados),
-    }),
+  iniciarCotacao: async (dados) => {
+    console.log("🛠️ [MOCK] Interceptando iniciarCotacao", dados);
+    await simulateDelay(800); // simula rede
+
+    const id = generateUUID();
+    const mockSolicitacao = {
+      id,
+      pedido_id: dados.pedido_id,
+      tipo_transporte: dados.tipo_transporte || "RODOVIARIO",
+      status: "AGUARDANDO",
+      data_criacao: new Date().toISOString(),
+      isMock: true, // flag interna para saber que é mock
+      cotacoes: [],
+    };
+
+    mockDb.solicitacoes.push(mockSolicitacao);
+
+    // Simula a background task gerando 3 cotações
+    setTimeout(() => {
+      console.log(`🛠️ [MOCK] Gerando cotações para ${id}...`);
+      const transportadoras = ["TransLog Express", "Rodo Frete Brasil", "CargoVia Sul"];
+      mockSolicitacao.cotacoes = transportadoras.map((nome) => ({
+        id: generateUUID(),
+        transportadora_id: generateUUID(),
+        transportadora: { id: generateUUID(), nome_fantasia: nome },
+        valor: (Math.random() * 1500 + 500).toFixed(2),
+        prazo: Math.floor(Math.random() * 10) + 2,
+      }));
+      mockSolicitacao.status = "COTADO";
+    }, 2000);
+
+    return mockSolicitacao;
+  },
 
   // Etapa 2: confirma a cotação escolhida → dispara SELECIONADO → EM_TRANSITO → ENTREGUE
-  contratarFrete: (solicitacaoId, cotacaoId) =>
-    request("/demo-contratar-frete", {
-      method: "POST",
-      body: JSON.stringify({ solicitacao_id: solicitacaoId, cotacao_id: cotacaoId }),
-    }),
+  contratarFrete: async (solicitacaoId, cotacaoId) => {
+    console.log("🛠️ [MOCK] Interceptando contratarFrete", solicitacaoId, cotacaoId);
+    await simulateDelay(500);
 
-  listarSolicitacoes: () => request("/solicitacoes"),
+    const sol = mockDb.solicitacoes.find(s => s.id === solicitacaoId);
+    if (!sol) {
+      // Se não achar no mock, repassa pro backend real (caso seja teste na base oficial)
+      return request("/demo-contratar-frete", {
+        method: "POST",
+        body: JSON.stringify({ solicitacao_id: solicitacaoId, cotacao_id: cotacaoId }),
+      });
+    }
 
-  detalharSolicitacao: (id) => request(`/solicitacoes/${id}`),
+    const cotacao = sol.cotacoes.find(c => c.id === cotacaoId);
+    if (!cotacao) throw new Error("Cotação mock não encontrada");
 
-  listarCotacoes: (solicitacaoId) =>
-    request(`/solicitacoes/${solicitacaoId}/cotacoes`),
+    sol.status = "SELECIONADO";
+    sol.frete_selecionado = {
+      id: generateUUID(),
+      cotacao_id: cotacaoId,
+      cotacao: cotacao,
+    };
+
+    // Progressão automática de status em background
+    setTimeout(() => {
+      if (sol.status === "SELECIONADO") sol.status = "EM_TRANSITO";
+      console.log(`🚚 [MOCK] Status atualizado: ${sol.id} → EM_TRANSITO`);
+      
+      setTimeout(() => {
+        if (sol.status === "EM_TRANSITO") sol.status = "ENTREGUE";
+        console.log(`📦 [MOCK] Status atualizado: ${sol.id} → ENTREGUE`);
+      }, 10000); // +10s para ENTREGUE
+    }, 5000); // 5s para EM_TRANSITO
+
+    return sol;
+  },
+
+  listarSolicitacoes: async () => {
+    // Busca do backend real
+    const realData = await request("/solicitacoes").catch(() => []);
+    
+    // Mescla mock + real
+    const merged = [...mockDb.solicitacoes, ...realData];
+    
+    // Ordena por data decrescente
+    merged.sort((a, b) => new Date(b.data_criacao) - new Date(a.data_criacao));
+    return merged;
+  },
+
+  detalharSolicitacao: async (id) => {
+    const sol = mockDb.solicitacoes.find(s => s.id === id);
+    if (sol) {
+      await simulateDelay(300);
+      return sol; // Retorna do mock
+    }
+    // Se não for mock, busca do real
+    return request(`/solicitacoes/${id}`);
+  },
+
+  listarCotacoes: async (solicitacaoId) => {
+    const sol = mockDb.solicitacoes.find(s => s.id === solicitacaoId);
+    if (sol) {
+      await simulateDelay(200);
+      return sol.cotacoes || [];
+    }
+    return request(`/solicitacoes/${solicitacaoId}/cotacoes`);
+  },
 };

@@ -355,8 +355,18 @@ async def demo_iniciar_cotacao(
         status="AGUARDANDO",
     )
     db.add(solicitacao)
-    await db.commit()
-    await db.refresh(solicitacao)
+    try:
+        await db.commit()
+        await db.refresh(solicitacao)
+    except Exception as exc:
+        await db.rollback()
+        # Expõe o erro real para diagnóstico via Swagger / logs
+        detalhe = str(exc.orig) if hasattr(exc, "orig") else str(exc)
+        logger.error("[DEMO] Falha ao gravar solicitação no banco: %s", detalhe, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao gravar no banco: {detalhe}",
+        )
 
     logger.info(
         "[DEMO] Solicitação criada: id=%s pedido_id=%s",
