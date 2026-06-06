@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -84,14 +85,35 @@ async def solicitar_frete_externo(
 
     pedido_id = dados.pedido_id
 
-    # 1. Gravar solicitação no banco
+    # 1. Garantir que o Pedido existe no banco (FK: solicitacao_frete.pedido_id → pedido.id)
+    pedido_existente = await db.get(Pedido, pedido_id)
+    if pedido_existente is None:
+        pedido = Pedido(id=pedido_id, status="PENDENTE")
+        db.add(pedido)
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"pedido_id {pedido_id} já existe com dados incompatíveis.",
+            )
+
+    # 2. Gravar solicitação no banco
     solicitacao = SolicitacaoFrete(
         pedido_id=pedido_id,
         tipo_transporte=dados.tipo_transporte,
         status="AGUARDANDO",
     )
     db.add(solicitacao)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflito ao gravar solicitação: {exc.orig}",
+        )
     await db.refresh(solicitacao)
 
     logger.info(
@@ -334,7 +356,21 @@ async def demo_iniciar_cotacao(
 
     pedido_id = dados.pedido_id
 
-    # 0. Triagem automática de veículo por peso
+    # 0a. Garantir que o Pedido existe no banco (FK: solicitacao_frete.pedido_id → pedido.id)
+    pedido_existente = await db.get(Pedido, pedido_id)
+    if pedido_existente is None:
+        pedido = Pedido(id=pedido_id, status="PENDENTE")
+        db.add(pedido)
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"pedido_id {pedido_id} já existe com dados incompatíveis.",
+            )
+
+    # 0b. Triagem automática de veículo por peso
     tipo_veiculo_final = dados.tipo_veiculo
     if dados.peso_carga is not None and not dados.tipo_veiculo:
         tipo_veiculo_final = selecionar_veiculo_por_peso(
@@ -354,7 +390,14 @@ async def demo_iniciar_cotacao(
         status="AGUARDANDO",
     )
     db.add(solicitacao)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflito ao gravar solicitação demo: {exc.orig}",
+        )
     await db.refresh(solicitacao)
 
     logger.info(
