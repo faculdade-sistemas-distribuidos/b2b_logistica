@@ -94,7 +94,7 @@ cp .env.example .env
 | `JWT_EXPIRATION_MINUTES` | Duracao de validade do token em minutos | `240` |
 | `JWT_CLOCK_SKEW_SECONDS` | Tolerancia de desvio de relogio para validacao do JWT | `60` |
 
-> **Atencao:** O arquivo `.env` nunca deve ser commitado no repositorio. Ele ja esta listado no `.gitignore`.
+> **Atencao:** O arquivo `.env` nunca deve ser commitado no repositorio. Ele ja esta listado no `.gitignore`. As variaveis `JWT_*` sao necessarias tanto para a validacao da API em producao quanto para o utilitario `gerar_token.py` — verifique que o seu `.env` contem todas elas (consulte `.env.example` para referencia).
 
 ---
 
@@ -184,6 +184,7 @@ b2b_logistica/
 │   └── package.json            # Dependencias Node
 ├── Dockerfile                  # Imagem do backend (python:3.11-slim + uvicorn)
 ├── docker-compose.yml          # Orquestracao dos servicos logistica-service e logistica-front
+├── gerar_token.py              # Utilitario CLI para geracao de tokens JWT validos
 ├── requirements.txt            # Dependencias Python
 ├── .env.example                # Modelo de variaveis de ambiente
 └── .gitignore
@@ -259,3 +260,87 @@ As tabelas mapeadas no schema `portal_b2b` sao:
 Em ambiente local, o Nginx do container `logistica-front` (porta `8088`) faz proxy das requisicoes `/api/logistica/*` diretamente para o backend `logistica-service:5008` dentro da rede Docker, dispensando o gateway externo.
 
 Em producao e integracao, o Load Balancer `34.8.17.245` roteia `/logistica/` para o container `logistica-front` e `/api/logistica/` para o container `logistica-service`. Os IPs das VMs individuais (`34.29.84.207` e `34.59.229.37`) devem ser usados apenas para diagnostico direto, nao como endpoint oficial.
+
+---
+
+## Utilitarios de Desenvolvimento
+
+### gerar_token.py — Gerador de Tokens JWT
+
+Script CLI para gerar tokens JWT validos sem instalar dependencias extras. Usa apenas a biblioteca padrao do Python e le as configuracoes direto do arquivo `.env`.
+
+**Cenario 1 — Acesso via navegador (Frontend):**
+
+```bash
+python3 gerar_token.py browser
+```
+
+Gera e imprime a URL completa pronta para colar no navegador:
+
+```
+http://34.8.17.245/logistica/?jwt=<TOKEN>
+```
+
+**Cenario 2 — Integracao do sistema Demandas (server-to-server):**
+
+```bash
+python3 gerar_token.py demandas
+```
+
+Gera e imprime a instrucao de cabecalho HTTP:
+
+```
+Authorization: Bearer <TOKEN>
+```
+
+**Opcoes adicionais:**
+
+```bash
+# Sobrescrever a duracao de validade (em minutos)
+python3 gerar_token.py browser --expiracao 60
+python3 gerar_token.py demandas --expiracao 30
+
+# Exibir ajuda completa
+python3 gerar_token.py --help
+```
+
+**Contrato do token gerado:**
+
+| Parametro | Valor |
+|---|---|
+| Algoritmo | HS256 (HMAC-SHA256) |
+| Issuer (`iss`) | `portal-autenticacao` |
+| Audience (`aud`) | `portal-b2b` |
+| Expiracao padrao | 240 minutos (4 horas) |
+| Subject — browser | `usuario-logistica-dev` |
+| Subject — demandas | `svc-demandas` |
+
+> **Prerequisito:** o arquivo `.env` na raiz do projeto deve conter a variavel `JWT_SECRET`. O `.env` ja esta configurado com os valores corretos do Portal B2B.
+
+---
+
+## Historico de Alteracoes Recentes
+
+### UUID Dinamico no Botao Demo (Frontend)
+
+**Arquivo alterado:** `frontend/src/components/SolicitacaoForm.jsx`
+
+O campo `pedido_id` enviado pelo formulario **"Nova Solicitacao Demo"** era um UUID estatico hardcoded, o que causava `HTTP 409 Conflict` no banco a partir da segunda utilizacao do botao na mesma sessao do banco de dados.
+
+**Correcao aplicada:** a funcao `handleSubmit` agora chama `generateUUID()` — que ja existia no topo do arquivo — no momento exato do clique, garantindo um UUID unico a cada envio.
+
+```diff
+- pedido_id: "8cb22010-3bf9-42f3-8808-ccc9c7786a76"
++ pedido_id: generateUUID()   // novo UUID a cada clique
+```
+
+Campos opcionais deixados em branco recebem valores de fallback amigaveis para facilitar a identificacao de registros de demo no banco:
+
+| Campo | Fallback Demo |
+|---|---|
+| `peso_carga` | `1234.56` kg |
+| `tipo_carga_natureza` | `"SECA_GERAL"` |
+| `cep_origem` | `"01310100"` — Av. Paulista, SP |
+| `cep_destino` | `"20040020"` — Cinelandia, RJ |
+
+Pedidos reais enviados pelo microsservico de Demandas nao sao afetados — eles trazem seu proprio `pedido_id` controlado e coexistem no banco sem nenhuma colisao.

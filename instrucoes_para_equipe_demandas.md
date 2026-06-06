@@ -1,8 +1,8 @@
 # Guia de Integracao — Demandas com Logistica (Equipe 8)
 
-> **Versao:** 5.0 (Fluxo Descentralizado — Pos-Auditoria de Pre-Deployment)
+> **Versao:** 7.0 (UUID dinamico no botao Demo — sem colisao com pedidos reais)
 > **Autor:** Equipe 8 — Logistica (`logistica-service`)
-> **Ultima revisao:** Alinhado com a auditoria SRE de pre-deployment e com o Guia Oficial de Integracao da infraestrutura.
+> **Ultima revisao:** `pedido_id` do botao Demo agora e gerado dinamicamente via `crypto.randomUUID()`, eliminando conflito 409 com os payloads reais enviados pelo Demandas.
 
 ---
 
@@ -24,6 +24,8 @@ O fluxo funciona da seguinte forma:
 
 A API e protegida via JWT (JSON Web Token). Para consumir qualquer rota REST da Logistica, a aplicacao de Demandas deve possuir um token assinado pela chave secreta do Portal B2B.
 
+### 2.1 Como enviar o token
+
 **Metodo preferencial — Query String (para redirecionamentos do portal pai):**
 
 ```
@@ -37,6 +39,75 @@ Authorization: Bearer SEU_TOKEN_AQUI
 ```
 
 Em ambiente Docker local de desenvolvimento, o frontend (`logistica-front`) injeta automaticamente um token mock quando o hostname detectado e `localhost` ou `127.0.0.1`. Esse mecanismo e restrito ao ambiente local e nunca e ativado em producao. Em producao, a aplicacao de Demandas deve obter o token do usuario autenticado e inclui-lo explicitamente nas requisicoes.
+
+### 2.2 Contrato do Payload JWT
+
+O token deve ser assinado com o algoritmo **HS256** (HMAC-SHA256) usando o `JWT_SECRET` compartilhado. Os seguintes claims sao obrigatorios:
+
+| Claim | Tipo | Descricao | Valor esperado |
+|---|---|---|---|
+| `sub` | string | Identificador unico do cliente ou sistema | ex: `svc-demandas` |
+| `name` | string | Nome legivel para logs e auditoria | ex: `Sistema Demandas` |
+| `iss` | string | Emissor do token | `portal-autenticacao` |
+| `aud` | string | Audiencia do token | `portal-b2b` |
+| `iat` | number | Timestamp de emissao (Unix epoch, UTC) | gerado automaticamente |
+| `exp` | number | Timestamp de expiracao (Unix epoch, UTC) | `iat + 14400` (4 horas) |
+
+Exemplo de payload valido:
+
+```json
+{
+  "sub": "svc-demandas",
+  "name": "Sistema Demandas (integracao server-to-server)",
+  "iss": "portal-autenticacao",
+  "aud": "portal-b2b",
+  "iat": 1780746223,
+  "exp": 1780760623
+}
+```
+
+### 2.3 Geracao de Token com o Utilitario CLI
+
+A Equipe 8 disponibiliza o script `gerar_token.py` na raiz do repositorio para gerar tokens validos sem depender de ferramentas externas. O script usa apenas a biblioteca padrao do Python (sem instalacao de pacotes) e le as variaveis JWT diretamente do arquivo `.env`.
+
+**Para obter um token de integracao (server-to-server) pronto para uso:**
+
+```bash
+python3 gerar_token.py demandas
+```
+
+Saida esperada:
+
+```
+✅ Token gerado para integracao server-to-server (Demandas)
+────────────────────────────────────────────────────────────────────────
+Cabecalho HTTP a incluir em todas as requisicoes:
+
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+────────────────────────────────────────────────────────────────────────
+⚠  O token expira em 4h00min.
+```
+
+Copie a linha `Authorization: Bearer <TOKEN>` e inclua em cada requisicao HTTP ao logistica-service.
+
+**Opcoes disponiveis:**
+
+```bash
+# Token para integracao Demandas (Bearer header)
+python3 gerar_token.py demandas
+
+# Token para acesso via navegador (URL pronta com ?jwt=)
+python3 gerar_token.py browser
+
+# Sobrescrever tempo de expiracao (ex: 30 minutos)
+python3 gerar_token.py demandas --expiracao 30
+
+# Exibir ajuda
+python3 gerar_token.py --help
+```
+
+> **Prerequisito:** o arquivo `.env` da raiz do projeto deve conter `JWT_SECRET`. Consulte o `.env.example` para referencia.
 
 ---
 
@@ -195,9 +266,18 @@ DB_SCHEMA=portal_b2b
 KAFKA_BOOTSTRAP_SERVERS=10.128.0.2:9092,10.128.0.3:9092,10.128.0.4:9092
 
 ROOT_PATH=/api/logistica
+
+# JWT — obrigatorio para o utilitario gerar_token.py e para a validacao da API
+JWT_SECRET=DAJNjnbdaibndiuabdwqbiib24141F15n5j1n
+JWT_ISSUER=portal-autenticacao
+JWT_AUDIENCE=portal-b2b
+JWT_EXPIRATION_MINUTES=240
+JWT_CLOCK_SKEW_SECONDS=60
 ```
 
 O banco oficial e o Cloud SQL PostgreSQL em `136.114.235.212:5432`. O host `localhost` ou `postgres` nao deve ser usado para o banco em nenhum cenario de integracao.
+
+As variaveis `JWT_*` sao necessarias tanto para o utilitario `gerar_token.py` quanto para a validacao de tokens pela API em producao. Consulte o `.env.example` na raiz do repositorio para o template completo.
 
 ---
 
@@ -212,3 +292,38 @@ docker network create portal-b2b-network
 O arquivo `.env` nunca deve ser commitado no repositorio. Ele esta listado no `.gitignore`. Utilize sempre o `.env.example` como base.
 
 Duvidas sobre o fluxo de integracao, mapeamento de UUIDs ou formato dos payloads devem ser alinhadas diretamente com a Equipe 8.
+
+---
+
+## 7. Coexistencia entre Demo e Pedidos Reais (sem conflito 409)
+
+### Contexto
+
+O frontend do microsservico de Logistica possui um botao **"Nova Solicitacao Demo"** que permite disparar um fluxo completo de cotacao sem depender de um payload vindo do Demandas. Ate a versao anterior, esse botao enviava sempre o mesmo `pedido_id` fixo no payload — o que causava erro `HTTP 409 Conflict` no banco ao tentar inserir um registro duplicado.
+
+### O que mudou
+
+A funcao `handleSubmit` do componente `SolicitacaoForm.jsx` foi alterada para gerar um `pedido_id` unico a cada clique usando `crypto.randomUUID()` (com fallback para contextos HTTP inseguros):
+
+```js
+// Antes — UUID estatico, causava 409 na segunda tentativa
+pedido_id: "8cb22010-3bf9-42f3-8808-ccc9c7786a76"
+
+// Depois — UUID unico gerado no momento do clique
+pedido_id: generateUUID()
+```
+
+Alem disso, campos opcionais que chegassem vazios agora recebem valores de fallback identificaveis como origem demo:
+
+| Campo | Fallback Demo |
+|---|---|
+| `peso_carga` | `1234.56` kg |
+| `tipo_carga_natureza` | `"SECA_GERAL"` |
+| `cep_origem` | `"01310100"` (Av. Paulista, SP) |
+| `cep_destino` | `"20040020"` (Cinelandia, RJ) |
+
+### Impacto para o Demandas
+
+Nenhum. O Demandas continua enviando seu proprio `pedido_id` (fixo e controlado pelo sistema de pedidos). O frontend Demo gera um UUID completamente diferente a cada clique. As duas origens coexistem no banco sem qualquer colisao.
+
+Se no futuro precisar distinguir registros de demo em queries de banco, basta filtrar pelo `cep_origem = '01310100'` ou `peso_carga = 1234.56`.
