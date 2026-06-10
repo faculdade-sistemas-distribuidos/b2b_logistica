@@ -198,23 +198,28 @@ A Equipe de Demandas pode escutar os topicos publicados pela Logistica para atua
 | `frete_selecionado` | Apos a contratacao confirmada — contem `pedido_id`, `cotacao_id`, `transportadora_id`, `valor` e `prazo` |
 | `logistica_status_atualizado` | A cada transicao de status de rastreio (`EM_TRANSITO` e `ENTREGUE`) |
 
-**Topico publicado pelo Demandas (voces publicam, a Logistica consome):**
+**Tópico publicado pelo Demandas (vocês publicam, a Logística consome):**
 
-| Topico | Quando publicar |
+| Tópico | Quando publicar |
 |---|---|
-| `frete_contratado` | Alternativa assincrona ao `POST /demo-contratar-frete`. Payload obrigatorio: `solicitacao_id` e `cotacao_id`. |
+| `frete_contratado` | Confirmação da escolha do frete assíncrona. |
 
-Todos os eventos seguem o envelope padrao do Portal B2B:
+### Contrato de Mensageria (`frete_contratado`)
+
+A confirmação do envelope padrão que esperamos receber no tópico `frete_contratado` para que o nosso consumo funcione é:
 
 ```json
 {
-  "eventId": "uuid",
-  "eventType": "nome_do_topico",
+  "eventId": "123e4567-e89b-12d3-a456-426614174000",
+  "eventType": "frete_contratado",
   "eventVersion": "1.0",
-  "timestamp": "ISO8601",
-  "source": "nome-do-servico",
-  "correlationId": "uuid",
-  "payload": {}
+  "timestamp": "2026-06-10T12:00:00Z",
+  "source": "demandas-service",
+  "correlationId": "123e4567-e89b-12d3-a456-426614174000",
+  "payload": {
+    "solicitacao_id": "2e5f5fec-d840-4d87-9e75-b43ea56d31b8",
+    "cotacao_id": "c0746b1c-7708-410a-8d19-90b9b3e1f579"
+  }
 }
 ```
 
@@ -295,11 +300,13 @@ Duvidas sobre o fluxo de integracao, mapeamento de UUIDs ou formato dos payloads
 
 ---
 
-## 7. Coexistencia entre Demo e Pedidos Reais (sem conflito 409)
+## 7. Isolamento da Demo e Testes
 
-### Contexto
+### Contexto da Camada de Mock
 
-O frontend do microsservico de Logistica possui um botao **"Nova Solicitacao Demo"** que permite disparar um fluxo completo de cotacao sem depender de um payload vindo do Demandas. Ate a versao anterior, esse botao enviava sempre o mesmo `pedido_id` fixo no payload — o que causava erro `HTTP 409 Conflict` no banco ao tentar inserir um registro duplicado.
+**Aviso Técnico:** O nosso Front-end de testes foi isolado em uma camada de Mock. O Demandas precisa saber que os testes visuais que fazemos não vão gerar colisão de `UUID` ou erro `HTTP 409 Conflict` no banco de dados com os pedidos reais que vocês enviarem.
+
+O botão **"Nova Solicitação Demo"** permite disparar um fluxo completo de cotação sem depender de um payload vindo do Demandas, mas ele funciona completamente isolado.
 
 ### O que mudou
 

@@ -203,7 +203,26 @@ b2b_logistica/
 | `frete_selecionado` | Publicado | Confirma o frete selecionado apos a contratacao |
 | `logistica_status_atualizado` | Publicado | Notifica transicoes de status do rastreio (`EM_TRANSITO`, `ENTREGUE`) |
 
-Todas as mensagens seguem o envelope padrao do Portal B2B com os campos: `eventId`, `eventType`, `eventVersion`, `timestamp`, `source`, `correlationId` e `payload`.
+### Contrato de Mensageria (`frete_contratado`)
+
+A confirmação do envelope padrão que esperamos receber no tópico `frete_contratado` para que o nosso consumo funcione:
+
+```json
+{
+  "eventId": "123e4567-e89b-12d3-a456-426614174000",
+  "eventType": "frete_contratado",
+  "eventVersion": "1.0",
+  "timestamp": "2026-06-10T12:00:00Z",
+  "source": "demandas-service",
+  "correlationId": "123e4567-e89b-12d3-a456-426614174000",
+  "payload": {
+    "solicitacao_id": "2e5f5fec-d840-4d87-9e75-b43ea56d31b8",
+    "cotacao_id": "c0746b1c-7708-410a-8d19-90b9b3e1f579"
+  }
+}
+```
+
+Todas as mensagens seguem o envelope padrao do Portal B2B com os campos acima.
 
 ---
 
@@ -263,7 +282,11 @@ Em producao e integracao, o Load Balancer `34.8.17.245` roteia `/logistica/` par
 
 ---
 
-## Utilitarios de Desenvolvimento
+## Utilitarios de Desenvolvimento e Segurança
+
+### Autenticação (JWT)
+
+A nossa API exige token JWT. O microsserviço de Demandas precisa enviar o header `Authorization: Bearer <TOKEN>`.
 
 ### gerar_token.py — Gerador de Tokens JWT
 
@@ -319,13 +342,13 @@ python3 gerar_token.py --help
 
 ---
 
-## Historico de Alteracoes Recentes
+## Isolamento da Demo e Testes
 
-### UUID Dinamico no Botao Demo (Frontend)
+### Camada de Mock no Frontend
 
-**Arquivo alterado:** `frontend/src/components/SolicitacaoForm.jsx`
+**Aviso técnico:** O nosso Front-end de testes foi isolado em uma camada de Mock. O Demandas precisa saber que os testes visuais que fazemos não vão gerar colisão de `UUID` ou erro `409 Conflict` no banco de dados com os pedidos reais que eles enviarem.
 
-O campo `pedido_id` enviado pelo formulario **"Nova Solicitacao Demo"** era um UUID estatico hardcoded, o que causava `HTTP 409 Conflict` no banco a partir da segunda utilizacao do botao na mesma sessao do banco de dados.
+O campo `pedido_id` enviado pelo formulario **"Nova Solicitacao Demo"** gera um `UUID` unico e dinâmico a cada envio. Pedidos reais enviados pela API continuam isolados em seu escopo de dados.
 
 **Correcao aplicada:** a funcao `handleSubmit` agora chama `generateUUID()` — que ja existia no topo do arquivo — no momento exato do clique, garantindo um UUID unico a cada envio.
 
