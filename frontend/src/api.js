@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || (window.location.hostname === "localhost" ? "http://localhost:5008" : "/api/logistica");
+const API_BASE = "/api/logistica";
 
 // ============================================================
 // Auth Bootstrap — Portal B2B (PR #1 — rrosantos)
@@ -88,7 +88,14 @@ const mockDb = {
 };
 
 function generateUUID() {
-  return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for non-HTTPS environments
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 function simulateDelay(ms) {
